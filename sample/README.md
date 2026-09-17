@@ -11,7 +11,8 @@ schema, published in full so you can judge it before paying anything.
   refuses to guess
 - [`output/rls_policies.sql`](output/rls_policies.sql) — the policies, in one transaction
 - [`output/rls_tests.mjs`](output/rls_tests.mjs) — the proof script
-- [`output/ci.yml`](output/ci.yml) and [`output/playbooks/`](output/playbooks/)
+- [`output/ci.yml`](output/ci.yml) — the gate that stops it regressing
+- [`output/playbooks/`](output/playbooks/) — one of the four runbooks in full, so you can judge the writing; the other three come with the pack
 
 ## Three things worth looking at
 

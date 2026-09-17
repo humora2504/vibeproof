@@ -1,6 +1,6 @@
 # vibeproof Fix Pack report
 
-Generated 2026-09-17 16:50 from supabase/migrations/001_schema.sql
+Generated 2026-09-17 16:51 from supabase/migrations/001_schema.sql
 
 ## Tables found: 9
 
