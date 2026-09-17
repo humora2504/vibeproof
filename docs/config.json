@@ -1,1 +1,7 @@
-{ "payment_link": null, "price_display": "$19", "currency": "usd", "amount_cents": 1900, "status": "pending_stripe_auth" }
+{
+ "payment_link": "https://buy.stripe.com/28E9ATeVFcEoeGFgHHawo00",
+ "price_display": "$19",
+ "currency": "usd",
+ "amount_cents": 1900,
+ "status": "live"
+}
