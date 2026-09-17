@@ -1,0 +1,35 @@
+# Blocks a merge when a key is exposed or a table loses its Row Level Security.
+# Save as .github/workflows/vibeproof.yml
+name: vibeproof
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  security-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # so the scan sees files added in this branch
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Fails the job on any critical or high finding.
+      # Change --fail-on to 'critical' if high findings should only warn.
+      - name: Scan for exposed keys and open tables
+        run: npx --yes github:humora2504/vibeproof . --fail-on high --no-color
+
+      # Keeps the machine-readable report as a build artefact.
+      - name: Save report
+        if: always()
+        run: npx --yes github:humora2504/vibeproof . --json > vibeproof-report.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vibeproof-report
+          path: vibeproof-report.json

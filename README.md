@@ -52,6 +52,13 @@ git clone https://github.com/humora2504/vibeproof && cd vibeproof
 node demo/run-demo.js
 ```
 
+## What the paid half produces
+
+No customers yet, so no case study. Instead the **full output of the paid
+generator** is published in the open, run over a representative nine-table
+multi-tenant schema: [`sample/`](sample/) — the input schema, the report, the
+generated SQL and the proof script. Judge it before paying anything.
+
 ## Why this exists
 
 An independent scan of 1,072 apps built with AI coding tools found security
