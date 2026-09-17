@@ -1,0 +1,29 @@
+name: 'vibeproof security scan'
+description: 'Fails the build when a key is exposed or a table has no Row Level Security. For Supabase, Firebase and Next.js projects.'
+author: 'vibeproof'
+branding:
+  icon: 'lock'
+  color: 'green'
+inputs:
+  path:
+    description: 'Directory to scan, relative to the workspace.'
+    required: false
+    default: '.'
+  fail-on:
+    description: 'Fail at this severity or worse: critical, high, medium or low.'
+    required: false
+    default: 'high'
+  report:
+    description: 'Also write a JSON report to this path. Leave empty to skip.'
+    required: false
+    default: ''
+outputs:
+  critical:
+    description: 'Number of critical findings.'
+  high:
+    description: 'Number of high findings.'
+  total:
+    description: 'Total findings.'
+runs:
+  using: 'node20'
+  main: 'action/index.js'

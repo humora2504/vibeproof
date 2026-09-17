@@ -1,0 +1,22 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Scanner test suite
+        run: node test/run.js
+      - name: Scan this repository with the action itself
+        uses: ./
+        with:
+          path: '.'
+          fail-on: 'critical'
