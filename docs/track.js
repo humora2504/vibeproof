@@ -16,6 +16,13 @@
   var bot=(navigator.webdriver===true||/HeadlessChrome|Playwright|Puppeteer/i.test(navigator.userAgent))?1:0;
   var lang=(navigator.language||"").slice(0,2);
   var t0=Date.now(), maxScroll=0, active=0, lastTick=Date.now(), sentDepth={};
+  // A crawler that runs JavaScript looks identical to a person in every other
+  // signal. People move a pointer, touch the screen or press a key; crawlers
+  // almost never do. This is the honest line between a visit and a fetch.
+  var interacted=0;
+  ["mousemove","touchstart","keydown","wheel","pointerdown"].forEach(function(e){
+    addEventListener(e,function(){interacted=1;},{once:true,passive:true});
+  });
   function send(ev,extra){
     var d={ev:ev,p:location.pathname,bot:bot,src:src,c:camp,seg:seg,v:variant,dev:dev,lang:lang,vid:vid,t:Math.round((Date.now()-t0)/1000)};
     if(extra)for(var k in extra)d[k]=extra[k];
@@ -28,6 +35,6 @@
     if(pct>maxScroll){maxScroll=pct;[25,50,75,90].forEach(function(m){if(pct>=m&&!sentDepth[m]){sentDepth[m]=1;send("depth",{d:m});}});}
   },{passive:true});
   document.addEventListener("visibilitychange",function(){if(document.hidden){active+=Date.now()-lastTick;}else{lastTick=Date.now();}});
-  addEventListener("pagehide",function(){active+=document.hidden?0:(Date.now()-lastTick);send("leave",{act:Math.round(active/1000),sc:maxScroll});});
+  addEventListener("pagehide",function(){active+=document.hidden?0:(Date.now()-lastTick);send("leave",{act:Math.round(active/1000),sc:maxScroll,int:interacted});});
   document.addEventListener("click",function(e){var a=e.target.closest("[data-track]");if(a){send("click",{id:a.getAttribute("data-track")});}});
 })();
