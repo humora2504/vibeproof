@@ -1,0 +1,29 @@
+# Runs the scanner against the deliberately unprotected demo project on every
+# push, so anyone can read a real run instead of trusting a screenshot.
+name: demo
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  scan-the-insecure-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Scan the deliberately unprotected demo project
+        run: node demo/run-demo.js
+
+      - name: Confirm the committed output still matches this run
+        run: |
+          if ! git diff --quiet demo/expected-output.txt; then
+            echo "::error::demo/expected-output.txt is out of date. Run: node demo/run-demo.js"
+            git diff demo/expected-output.txt
+            exit 1
+          fi
+          echo "The published demo output matches what the scanner produces today."

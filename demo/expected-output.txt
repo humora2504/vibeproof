@@ -1,0 +1,78 @@
+
+  vibeproof  v1.0.0
+  5 files - Supabase, Next.js - 0ms
+
+   CRITICAL   Supabase service_role key is committed to the repository
+      .env:2  -> eyJhbG…ture (131 chars)
+      The service_role key bypasses Row Level Security completely. Whoever holds it can read, change and delete every row in every table, whatever your policies say.
+      Fix: Rotate the service_role key in the Supabase dashboard (Settings, API, Reset). Use it only in server code, never in a NEXT_PUBLIC_ / VITE_ / EXPO_PUBLIC_ variable and never in a client component.
+
+   CRITICAL   A Supabase admin client is built in code that runs in the browser
+      src/lib/admin.ts:5  -> createClient(…SERVICE_ROLE…)
+      A client built with the service_role key ignores every Row Level Security policy. Shipping it to the browser hands full database control to every visitor.
+      Fix: Move this client into a server route, a server action or an edge function, and keep the key in a variable without a public prefix.
+
+   CRITICAL   Table "profiles" has no Row Level Security
+      supabase/migrations/001_init.sql:4  -> create table profiles … (no "enable row level security" found)
+      Supabase exposes every table in the public schema over a REST endpoint. Without Row Level Security, anyone holding your anon key, which ships in your frontend, can read and write this table.
+      Fix: Run: alter table public.profiles enable row level security;  then add a policy that matches rows to their owner, for example: create policy "own rows" on public.profiles for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+      Note: Detected from your migration files. If Row Level Security was enabled from the dashboard instead, confirm it there.
+
+   CRITICAL   Table "orders" has no Row Level Security
+      supabase/migrations/001_init.sql:5  -> create table orders … (no "enable row level security" found)
+      Supabase exposes every table in the public schema over a REST endpoint. Without Row Level Security, anyone holding your anon key, which ships in your frontend, can read and write this table.
+      Fix: Run: alter table public.orders enable row level security;  then add a policy that matches rows to their owner, for example: create policy "own rows" on public.orders for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+      Note: Detected from your migration files. If Row Level Security was enabled from the dashboard instead, confirm it there.
+
+   CRITICAL   Table "invoices" has no Row Level Security
+      supabase/migrations/001_init.sql:6  -> create table invoices … (no "enable row level security" found)
+      Supabase exposes every table in the public schema over a REST endpoint. Without Row Level Security, anyone holding your anon key, which ships in your frontend, can read and write this table.
+      Fix: Run: alter table public.invoices enable row level security;  then add a policy that matches rows to their owner, for example: create policy "own rows" on public.invoices for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+      Note: Detected from your migration files. If Row Level Security was enabled from the dashboard instead, confirm it there.
+
+   CRITICAL   Policy "enable read for all" on posts allows every operation to anyone
+      supabase/migrations/001_init.sql:11  -> using (true), for all
+      Row Level Security is switched on but this policy passes for every request, including unauthenticated ones. Any visitor can read, insert, update and delete rows through the public REST endpoint.
+      Fix: Replace the condition with an ownership check, for example: using (auth.uid() = user_id). If the table really is public reference data, restrict the policy to "for select" and grant it to anon only.
+
+   CRITICAL   Write privileges granted to the anonymous role on public.invoices
+      supabase/migrations/001_init.sql:14  -> grant all … to anon
+      The anon role is the role every unauthenticated visitor uses. Granting it write privileges lets anyone change your data directly through the API.
+      Fix: Revoke these privileges from anon and grant them to authenticated, then control the rows with a Row Level Security policy.
+
+   HIGH       NEXTAUTH_SECRET is empty or too short
+      .env:3  -> NEXTAUTH_SECRET = 3 characters
+      Session and token signatures are only as strong as this value. A short or guessable secret lets an attacker mint valid sessions for any user.
+      Fix: Generate at least 32 random bytes, for example: openssl rand -base64 32
+
+   HIGH       Database connection string with an embedded password
+      .env:4  -> postgresql://postgres:***@db.demoproject.supabase.co:5432/postgres
+      This grants direct database access, bypassing every application-level check and every Row Level Security policy.
+      Fix: Move it to a server-only environment variable and rotate the database password.
+
+   HIGH       Endpoint that changes data with no authorisation check in sight
+      src/app/api/orders/route.ts:4  -> export DELETE handler with no auth or session call
+      A handler that writes without checking who is calling can be driven by anyone with the URL, straight from a terminal.
+      Fix: Load the caller at the top of the handler and return 401 when there is none, then check that the caller owns the record before writing.
+      Note: Heuristic: this looks for common auth helper names. If your check lives in middleware or a wrapper, treat this as already handled.
+      Confidence: low - worth a look, may already be handled elsewhere.
+
+   MEDIUM     .gitignore does not exclude env files
+      .gitignore:1  -> no .env entry found
+      The next person to run "git add ." commits every credential in the project.
+      Fix: Add these lines to .gitignore: .env and .env*.local
+
+   MEDIUM     Storage bucket created as public
+      supabase/migrations/001_init.sql:17  -> storage.buckets … public = true
+      Every object in a public bucket is readable by URL without authentication. That is correct for avatars and wrong for invoices, uploads and user documents.
+      Fix: If the bucket holds anything user-specific, set public = false and serve files through signed URLs.
+
+  Summary: 7 critical - 3 high - 2 medium
+
+  Rotate any exposed key before anything else.
+  Deleting the line does not help: the old value stays in git history.
+
+  Every finding above carries its fix. If you want the fixes generated for
+  your own schema, with tests that prove the lockdown actually works:
+  https://humora2504.github.io/vibeproof/
+
