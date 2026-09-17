@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY: why this one variable name is a breach</title>
+<meta name="description" content="Putting the service role key behind a NEXT_PUBLIC_ prefix inlines it into your JavaScript bundle. What it gives away, and what to do in what order.">
+<link rel="canonical" href="https://humora2504.github.io/vibeproof/next-public-supabase-service-role-key.html">
+<meta property="og:title" content="NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY: why this one variable name is a breach">
+<meta property="og:description" content="Putting the service role key behind a NEXT_PUBLIC_ prefix inlines it into your JavaScript bundle. What it gives away, and what to do in what order.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://humora2504.github.io/vibeproof/next-public-supabase-service-role-key.html">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128274;</text></svg>">
+<link rel="stylesheet" href="style.css">
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "TechArticle", "headline": "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY", "description": "Putting the service role key behind a NEXT_PUBLIC_ prefix inlines it into your JavaScript bundle. What it gives away, and what to do in what order.", "url": "https://humora2504.github.io/vibeproof/next-public-supabase-service-role-key.html", "datePublished": "2026-09-18", "dateModified": "2026-09-18", "author": {"@type": "Organization", "name": "vibeproof"}}, {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "What can someone do with a leaked service_role key?", "acceptedAnswer": {"@type": "Answer", "text": "Everything. The service_role key bypasses Row Level Security entirely, so whoever holds it can read, change and delete every row in every table, regardless of your policies."}}, {"@type": "Question", "name": "Is it enough to delete the line and redeploy?", "acceptedAnswer": {"@type": "Answer", "text": "No. The value stays in your git history, in every clone and fork, and in build logs. You have to rotate the key at Supabase, then redeploy."}}, {"@type": "Question", "name": "How do I use the service role key safely?", "acceptedAnswer": {"@type": "Answer", "text": "Only in code that runs on a server: a route handler, a server action or an edge function, read from a variable with no public prefix. It must never be referenced in a client component."}}]}]</script>
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="./"><b>&#9632;</b> vibeproof</a>
+  <nav><a href="./">Home</a> <a href="./#pack">Fix Pack</a></nav>
+</div></header>
+<main class="wrap"><section class="hero">
+<h1>NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY</h1>
+
+<p class="lede">The prefix is the whole problem. Any environment variable starting
+with <code>NEXT_PUBLIC_</code> is inlined into the JavaScript bundle at build time,
+so the value is sitting in your deployed site, readable by anyone who opens
+developer tools.</p>
+
+<p>The same applies to <code>VITE_</code>, <code>REACT_APP_</code>,
+<code>EXPO_PUBLIC_</code>, <code>PUBLIC_</code>, <code>NUXT_PUBLIC_</code> and
+<code>GATSBY_</code>. The framework is doing exactly what it promises. The mistake
+is what got put behind the prefix.</p>
+
+<h2>Why this key in particular</h2>
+
+<p>Supabase issues two keys, and they are not two levels of the same thing.</p>
+
+<ul class="checks">
+<li>The <b>anon key</b> is meant to be public. It is restricted by Row Level
+Security, so it can only reach what your policies allow.</li>
+<li>The <b>service_role key</b> exists to bypass Row Level Security. That is its
+purpose. Policies do not apply to it at all.</li>
+</ul>
+
+<p>So a leaked anon key is a normal Tuesday. A leaked service_role key means
+every row in every table can be read, changed or deleted by anyone who found it,
+whatever your policies say. There is no partial version of this.</p>
+
+<h2>What to do, in this order</h2>
+
+<h3>1. Rotate the key. Not later, now.</h3>
+
+<p>In the Supabase dashboard: Settings, API, then reset the service key. Treat the
+old value as public from the moment it was deployed, because it was.</p>
+
+<p>Rotate before you clean anything up. Cleaning first only signals which value
+mattered.</p>
+
+<h3>2. Look at what was done with it</h3>
+
+<p>Rotation stops future use. It tells you nothing about the past. In the Supabase
+logs, filter to the window between the deploy and the rotation, and look for bulk
+reads of tables that an ordinary user would never touch, and for deletes you
+cannot account for.</p>
+
+<h3>3. Move the key to the server</h3>
+
+<pre class="block">// Wrong: the value is in the bundle
+const admin = createClient(url, process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY);
+
+// Right: a server-only variable, used in server-only code
+// app/api/things/route.ts
+const admin = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY   // no public prefix, never reaches the browser
+);</pre>
+
+<p>Worth knowing: with no public prefix, the variable is simply
+<code>undefined</code> in the browser. The framework will not leak it by accident.
+The prefix is the only thing that ever exposed it.</p>
+
+<h3>4. Ask whether you need it at all</h3>
+
+<p>Most uses of the service key are a workaround for Row Level Security getting in
+the way. That is worth resisting. A correct policy plus the ordinary client is
+safer than an admin client guarded by application code you might delete next
+month, because the policy applies to every path into the database and the code
+only applies to the path it sits on.</p>
+
+<h3>5. Clean the history, with realistic expectations</h3>
+
+<pre class="block">git ls-files | grep -E '^\.env'
+git rm --cached .env.local
+printf '.env\n.env*.local\n' >> .gitignore</pre>
+
+<p>Rewriting history on a public repository is rarely worth the disruption:
+assume forks already have the old commit. On a private repository with a small
+team, <code>git filter-repo</code> followed by a force push is reasonable, and
+everyone must re-clone.</p>
+
+<h2>Stopping it from happening again</h2>
+
+<p>The reliable fix is mechanical rather than disciplinary. A check that runs on
+every pull request and fails the build when a secret-shaped value appears behind
+a public prefix will catch this every time, including the times you are tired.</p>
+<h2>Related</h2>
+<ul class="checks"><li><a href="new-row-violates-row-level-security-policy.html">"new row violates row-level security policy"</a></li><li><a href="is-my-supabase-database-public.html">Is my Supabase database public?</a></li></ul>
+
+<hr>
+<h2>Check your own project</h2>
+<p>One command. No install, no signup, and it never touches the network. It reads
+your repository and tells you which tables are reachable and which keys are exposed,
+with the fix beside each finding.</p>
+<pre class="block">npx github:humora2504/vibeproof .</pre>
+<p class="small muted">Free and MIT licensed. If you want the policies generated for
+your own schema, and a script that proves an anonymous visitor is refused, there is a
+<a href="./#pack" data-track="content-to-pack">$19 Fix Pack</a>. The scanner stays free either way.</p>
+</section></main>
+<footer class="site"><div class="wrap"><div class="row">
+  <span>vibeproof &middot; MIT</span>
+  <span><a href="privacy.html">Privacy</a> &nbsp; <a href="terms.html">Terms</a> &nbsp; <a href="mailto:hugo@vystral.com">hugo@vystral.com</a></span>
+</div></div></footer>
+<script src="track.js"></script>
+</body>
+</html>

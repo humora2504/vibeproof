@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Is my Supabase database public? Check it in 30 seconds</title>
+<meta name="description" content="Your anon key is in your frontend by design. Here is how to find out, from outside your app, whether that means anyone can read your tables.">
+<link rel="canonical" href="https://humora2504.github.io/vibeproof/is-my-supabase-database-public.html">
+<meta property="og:title" content="Is my Supabase database public? Check it in 30 seconds">
+<meta property="og:description" content="Your anon key is in your frontend by design. Here is how to find out, from outside your app, whether that means anyone can read your tables.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://humora2504.github.io/vibeproof/is-my-supabase-database-public.html">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128274;</text></svg>">
+<link rel="stylesheet" href="style.css">
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Is my Supabase database public?", "description": "Your anon key is in your frontend by design. Here is how to find out, from outside your app, whether that means anyone can read your tables.", "url": "https://humora2504.github.io/vibeproof/is-my-supabase-database-public.html", "datePublished": "2026-09-18", "dateModified": "2026-09-18", "author": {"@type": "Organization", "name": "vibeproof"}}, {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Is it bad that my Supabase anon key is visible in the browser?", "acceptedAnswer": {"@type": "Answer", "text": "No. The anon key is designed to be public and is meant to ship in your frontend. What matters is whether Row Level Security is enabled on your tables, because that is what decides which rows the anon key can actually reach."}}, {"@type": "Question", "name": "How can I check without writing any code?", "acceptedAnswer": {"@type": "Answer", "text": "Take the project URL and anon key from your own bundle and make a single request to the REST endpoint for one of your tables. If rows come back, that table is readable by anyone."}}, {"@type": "Question", "name": "Does the green shield in the Supabase dashboard mean I am safe?", "acceptedAnswer": {"@type": "Answer", "text": "It means Row Level Security is enabled on that table. It does not tell you whether the policies attached to it actually restrict anything. A policy of using (true) passes for everyone."}}]}]</script>
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="./"><b>&#9632;</b> vibeproof</a>
+  <nav><a href="./">Home</a> <a href="./#pack">Fix Pack</a></nav>
+</div></header>
+<main class="wrap"><section class="hero">
+<h1>Is my Supabase database public?</h1>
+
+<p class="lede">Probably not, but the only way to know is to look from outside,
+the way a stranger would. It takes one request and no tools.</p>
+
+<h2>Why this question comes up at all</h2>
+
+<p>Supabase serves every table in the <code>public</code> schema over a REST
+endpoint, and your anon key ships inside your frontend bundle on purpose. Anyone
+can read that key out of your JavaScript in a few seconds. That is not the flaw.</p>
+
+<p>The flaw appears when a table has no Row Level Security. Then the anon key,
+which everyone has, is enough to read and often write that table. The key was
+never the secret. The policies are the protection.</p>
+
+<h2>Check it in 30 seconds</h2>
+
+<p>Open your deployed site, open developer tools, and search the loaded
+JavaScript for <code>supabase.co</code>. You will find your project URL and anon
+key. Then, from a terminal, ask the database directly:</p>
+
+<pre class="block">curl "https://YOUR-PROJECT.supabase.co/rest/v1/YOUR_TABLE?select=*&amp;limit=5" \
+  -H "apikey: YOUR_ANON_KEY"</pre>
+
+<p>Read the answer carefully:</p>
+
+<ul class="checks">
+<li><code>[]</code> means the table exists and nothing was returned to an
+anonymous caller. That is what you want.</li>
+<li>Rows of real data means anyone on the internet can read that table right now.</li>
+<li>A message about permission denied means the role has no privileges on it,
+which is also fine.</li>
+</ul>
+
+<p>Do the same for writing, which people forget to check:</p>
+
+<pre class="block">curl -X POST "https://YOUR-PROJECT.supabase.co/rest/v1/YOUR_TABLE" \
+  -H "apikey: YOUR_ANON_KEY" -H "Content-Type: application/json" \
+  -d '{"id":"00000000-0000-0000-0000-000000000000"}'</pre>
+
+<p>Anything other than a refusal means a stranger can insert rows into your
+database.</p>
+
+<h2>What the dashboard does and does not tell you</h2>
+
+<p>The shield beside a table tells you Row Level Security is enabled. It does not
+tell you whether the policy restricts anyone. These two tables both show a shield,
+and one of them is wide open:</p>
+
+<pre class="block">-- Protected: a row belongs to the user who owns it
+create policy "own rows" on public.invoices
+  for all to authenticated
+  using ( (select auth.uid()) = user_id )
+  with check ( (select auth.uid()) = user_id );
+
+-- Shield on, protection off: this passes for every caller, signed in or not
+create policy "enable read" on public.invoices
+  for all using ( true );</pre>
+
+<p>The second policy is common because it is the fastest way to make an error
+message go away. It is worth searching your migrations for <code>using (true)</code>
+before you trust any shield.</p>
+
+<h2>The other half: privileges</h2>
+
+<p>Row Level Security is checked after table privileges, not instead of them. A
+grant like this hands write access to every anonymous visitor regardless of your
+policies:</p>
+
+<pre class="block">grant all on public.invoices to anon;   -- almost never what you want</pre>
+
+<p>List what the anonymous role can actually do:</p>
+
+<pre class="block">select table_name, privilege_type
+from information_schema.role_table_grants
+where grantee = 'anon' and table_schema = 'public'
+order by table_name;</pre>
+
+<h2>If you find something open</h2>
+
+<p>Turn Row Level Security on before you write the policy. An app that errors is
+better than a table that leaks, and the error tells you exactly which query needs
+a policy:</p>
+
+<pre class="block">alter table public.invoices enable row level security;
+alter table public.invoices force row level security;
+revoke all on public.invoices from anon;
+grant select, insert, update, delete on public.invoices to authenticated;
+
+create policy "own invoices" on public.invoices
+  for all to authenticated
+  using ( (select auth.uid()) = user_id )
+  with check ( (select auth.uid()) = user_id );</pre>
+
+<p>Then check from outside again with the same curl command. Trusting the
+dashboard instead of the response is how people stay exposed after fixing it.</p>
+
+<p>If a service key was also exposed, rotate it before anything else. Deleting
+the line does not help, because the old value stays in your git history.</p>
+<h2>Related</h2>
+<ul class="checks"><li><a href="new-row-violates-row-level-security-policy.html">"new row violates row-level security policy"</a></li><li><a href="next-public-supabase-service-role-key.html">NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY</a></li></ul>
+
+<hr>
+<h2>Check your own project</h2>
+<p>One command. No install, no signup, and it never touches the network. It reads
+your repository and tells you which tables are reachable and which keys are exposed,
+with the fix beside each finding.</p>
+<pre class="block">npx github:humora2504/vibeproof .</pre>
+<p class="small muted">Free and MIT licensed. If you want the policies generated for
+your own schema, and a script that proves an anonymous visitor is refused, there is a
+<a href="./#pack" data-track="content-to-pack">$19 Fix Pack</a>. The scanner stays free either way.</p>
+</section></main>
+<footer class="site"><div class="wrap"><div class="row">
+  <span>vibeproof &middot; MIT</span>
+  <span><a href="privacy.html">Privacy</a> &nbsp; <a href="terms.html">Terms</a> &nbsp; <a href="mailto:hugo@vystral.com">hugo@vystral.com</a></span>
+</div></div></footer>
+<script src="track.js"></script>
+</body>
+</html>
