@@ -119,16 +119,16 @@ test/fixtures/
 examples/**/insecure-*
 ```
 
-## How it compares
+## What is free and what is paid
 
-| | Free checklists | Scanner subscriptions | vibeproof |
-|---|---|---|---|
-| Tells you what is wrong | generic list | yes, hosted | yes, free, offline |
-| Runs without sending your code anywhere | n/a | no | yes |
-| Writes the policies for your schema | no | no | Fix Pack |
-| Proves the fix from outside | no | no | Fix Pack |
-| Stops it regressing | no | no | CI gate, free |
-| Cost | free | $29–49 a month | free, or $19 once |
+| | Free scanner | Fix Pack, $19 once |
+|---|---|---|
+| Finds unprotected tables, permissive policies, exposed keys | yes | yes |
+| Runs offline, sends nothing anywhere | yes | yes |
+| Gate on every pull request | yes | yes |
+| Policies generated for your own schema | no | yes |
+| Script that proves anon and the wrong user are refused | no | yes |
+| Rotation, storage and incident playbooks | no | yes |
 
 ## What it is not
 
