@@ -102,7 +102,11 @@ SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... \
 
   function show(el) { [pending, ready, failed].forEach(function (x) { x.hidden = x !== el; }); }
 
-  if (!sid) { show(failed); document.getElementById('title').textContent = 'Nothing to show'; return; }
+  if (!sid && !((location.hash || '').indexOf('k=') >= 0 || new URLSearchParams(location.search).get('k'))) {
+    show(failed);
+    document.getElementById('title').textContent = 'Nothing to show';
+    return;
+  }
 
   // The pack sits in a public repository, because that is what GitHub Pages
   // serves, so it is stored encrypted. Two different keys are derived from the
@@ -133,9 +137,53 @@ SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... \
     return a;
   }
 
+  // Stripe redirects only people who completed payment, and it carries an unlock
+  // token in the URL fragment. Fragments are never sent to a server, so the token
+  // stays between Stripe, the buyer and this page. This path needs no backend at
+  // all: the pack is already published, encrypted, and this decrypts it here.
+  function unlockToken() {
+    var frag = (location.hash || '').replace(/^#/, '');
+    var fromHash = new URLSearchParams(frag).get('k');
+    if (fromHash) return fromHash;
+    return new URLSearchParams(location.search).get('k') || '';
+  }
+
+  function staticUnlock() {
+    var tok = unlockToken();
+    if (!tok) return Promise.reject(new Error('no token'));
+    return Promise.all([
+      fetch('pack/v1.json', { cache: 'no-store' }).then(function (r) {
+        if (!r.ok) throw new Error('no manifest'); return r.json();
+      }),
+      crypto.subtle.importKey('raw', enc.encode('vibeproof-static-unlock-v1'),
+        { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+        .then(function (k) { return crypto.subtle.sign('HMAC', k, enc.encode(tok)); })
+        .then(function (raw) { return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['decrypt']); }),
+      fetch('pack/v1.bin', { cache: 'no-store' }).then(function (r) { return r.arrayBuffer(); }),
+    ]).then(function (parts) {
+      var m = parts[0];
+      return crypto.subtle.decrypt({ name: 'AES-GCM', iv: hexToBytes(m.iv) }, parts[1], parts[2])
+        .then(function (plain) { return { m: m, plain: plain }; });
+    }).then(function (r) {
+      var blob = new Blob([r.plain], { type: 'application/zip' });
+      var a = document.getElementById('dl-zip');
+      a.href = URL.createObjectURL(blob);
+      a.setAttribute('download', r.m.filename);
+      a.textContent = r.m.filename + '  (' + Math.round(r.plain.byteLength / 1024) + ' KB)';
+      document.getElementById('file-list').textContent =
+        'Decrypted in your browser. Nothing readable is stored on the server.';
+      document.getElementById('title').textContent = 'Your Fix Pack is ready';
+      document.getElementById('sub').textContent =
+        'Payment confirmed by Stripe. Keep this URL: it is your download link.';
+      show(ready);
+      if (window.vtTrack) window.vtTrack('delivered', { via: 'static' });
+    });
+  }
+
   var started = Date.now();
   var tries = 0;
 
+  staticUnlock().catch(function () {
   hmacHex('vibeproof-delivery-path-v1', sid).then(function (hash) {
     var dir = 'd/' + hash;
 
@@ -185,6 +233,7 @@ SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... \
         });
     }
     attempt();
+  });
   });
 })();
 </script>

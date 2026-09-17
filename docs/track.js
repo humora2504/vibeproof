@@ -8,6 +8,8 @@
   var seg=q.get("seg")||"";
   var variant=(window.VT_VARIANT||q.get("v")||"A");
   var vid=Math.random().toString(36).slice(2,10); // per-pageview id, not persisted
+  // The delivery page carries an unlock token in the URL. It must never reach a
+  // beacon, a log, or anything else. Only the path is ever sent; scrubbed on purpose.
   var dev=/Mobi|Android/i.test(navigator.userAgent)?"mobile":"desktop";
   var lang=(navigator.language||"").slice(0,2);
   var t0=Date.now(), maxScroll=0, active=0, lastTick=Date.now(), sentDepth={};
