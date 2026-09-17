@@ -70,6 +70,24 @@ check('server-only service role client accepted', !c.findings.some(f => f.rule =
 check('authenticated route accepted', !c.findings.some(f => f.rule === 'APP-UNAUTHENTICATED-MUTATION'));
 
 // --- Report shape ---
+console.log('\nignore file:');
+{
+  const os = require('os');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vpig-'));
+  fs.mkdirSync(path.join(tmp, 'skipme'), { recursive: true });
+  fs.writeFileSync(path.join(tmp, 'skipme', 'x.sql'),
+    'create table public.leaky (id uuid primary key, user_id uuid);');
+  fs.writeFileSync(path.join(tmp, 'keep.sql'),
+    'create table public.other (id uuid primary key, user_id uuid);');
+  const before = scan(tmp);
+  fs.writeFileSync(path.join(tmp, '.vibeproofignore'), '# comment\nskipme/\n');
+  const after = scan(tmp);
+  check('without an ignore file both tables are reported', before.total === 2, 'got ' + before.total);
+  check('.vibeproofignore skips the listed directory', after.total === 1, 'got ' + after.total);
+  check('the unignored table is still reported', after.findings[0] && /other/.test(after.findings[0].title));
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
 console.log('\nreport contract:');
 check('every finding has a fix', v.findings.every(f => f.fix && f.fix.length > 20));
 check('every finding has a why', v.findings.every(f => f.why && f.why.length > 20));

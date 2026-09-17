@@ -1,0 +1,3 @@
+# The test fixtures are deliberately vulnerable. They are the test suite,
+# not a deployed app, so they must not fail this repository's own CI.
+test/fixtures/

@@ -24,8 +24,9 @@ if (has('--help') || has('-h')) {
     '  --no-color        plain text',
     '  --version         print version',
     '',
-    'Suppress a reviewed line with a  // vibeproof-ignore  comment,',
-    'or a whole file with  // vibeproof-ignore-file .',
+    'Suppress a reviewed line with a  // vibeproof-ignore  comment, or a whole',
+    'file with  // vibeproof-ignore-file . To skip whole directories, list them',
+    'in a  .vibeproofignore  file, one path or glob per line.',
     ''].join('\n'));
   process.exit(0);
 }

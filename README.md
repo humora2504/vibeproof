@@ -73,7 +73,13 @@ cannot be merged. A ready-made workflow is in the Fix Pack.
 ```
 
 Reviewed a finding and it is fine? Put `// vibeproof-ignore` on the line above,
-or `// vibeproof-ignore-file` anywhere in the file.
+or `// vibeproof-ignore-file` anywhere in the file. To skip whole directories,
+such as deliberately broken test fixtures, list them in `.vibeproofignore`:
+
+```
+test/fixtures/
+examples/**/insecure-*
+```
 
 ## What it is not
 
