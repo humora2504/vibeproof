@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Is it safe to expose the Supabase anon key? Yes, conditionally</title>
+<meta name="description" content="The anon key is designed to ship in your frontend. That is only safe if your table grants and Row Level Security policies are right. How to check yours in one request.">
+<link rel="canonical" href="https://humora2504.github.io/vibeproof/is-supabase-anon-key-safe-to-expose.html">
+<meta property="og:title" content="Is it safe to expose the Supabase anon key? Yes, conditionally">
+<meta property="og:description" content="The anon key is designed to ship in your frontend. That is only safe if your table grants and Row Level Security policies are right. How to check yours in one request.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://humora2504.github.io/vibeproof/is-supabase-anon-key-safe-to-expose.html">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128274;</text></svg>">
+<link rel="stylesheet" href="style.css">
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Is it safe to expose the Supabase anon key?", "description": "The anon key is designed to ship in your frontend. That is only safe if your table grants and Row Level Security policies are right. How to check yours in one request.", "url": "https://humora2504.github.io/vibeproof/is-supabase-anon-key-safe-to-expose.html", "datePublished": "2026-09-18", "dateModified": "2026-09-18", "author": {"@type": "Organization", "name": "vibeproof"}}, {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Should I rotate my Supabase anon key if it is visible?", "acceptedAnswer": {"@type": "Answer", "text": "No. The anon key is meant to be public and rotating it breaks every deployed client for no security gain. Fix the policies instead. Rotate the service role or secret key, which is a different key entirely."}}, {"@type": "Question", "name": "What makes the anon key safe or unsafe?", "acceptedAnswer": {"@type": "Answer", "text": "It is exactly as safe as the intersection of your table privileges and your Row Level Security policies. The key itself grants nothing; it identifies a role whose reach your policies define."}}, {"@type": "Question", "name": "How do I tell which key I leaked?", "acceptedAnswer": {"@type": "Answer", "text": "A key whose decoded payload says role anon, or one beginning sb_publishable_, is the public one. A payload saying service_role, or a key beginning sb_secret_, bypasses every policy and must be rotated immediately."}}]}]</script>
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="./"><b>&#9632;</b> vibeproof</a>
+  <nav><a href="./">Home</a> <a href="./#pack">Fix Pack</a></nav>
+</div></header>
+<main class="wrap"><section class="hero">
+<h1>Is it safe to expose the Supabase anon key?</h1>
+
+<p class="lede">Yes, and the word doing the work is conditionally. The anon key is
+designed to ship in your frontend. It is safe when your policies are right, and it
+is the whole attack surface when they are not.</p>
+
+<p>That is not a hedge. It is the actual security model, and understanding it is
+the difference between a calm afternoon and a bad one.</p>
+
+<h2>The key is not the secret</h2>
+
+<p>Supabase issues two kinds of key and they are not two strengths of the same
+thing.</p>
+
+<ul class="checks">
+<li>The <b>anon</b> key, or <code>sb_publishable_</code> in the newer format, is
+public by design. It identifies the anonymous role. Everything it can reach is
+decided by your table privileges and your Row Level Security policies.</li>
+<li>The <b>service role</b> key, or <code>sb_secret_</code>, exists specifically
+to bypass Row Level Security. Policies do not apply to it. It is a master key and
+belongs only in server code.</li>
+</ul>
+
+<p>So the honest formula is: what a visitor can do equals your table grants
+intersected with your policies. The key contributes nothing to that calculation.</p>
+
+<h2>Check which key you actually have</h2>
+
+<p>If it is a JWT, decode the middle segment. No tool needed:</p>
+
+<pre class="block">echo 'PASTE_THE_KEY' | cut -d. -f2 | base64 -d 2>/dev/null; echo</pre>
+
+<p><code>"role":"anon"</code> means public by design. <code>"role":"service_role"</code>
+means stop reading and rotate it now, in Settings, API, reset service key. Deleting
+the line does not help: the old value remains in your git history.</p>
+
+<h2>Check whether yours is safe, from outside</h2>
+
+<p>The only answer that counts comes from making the request a stranger would
+make. Take your own project URL and anon key out of your deployed bundle, then:</p>
+
+<pre class="block">curl "https://YOUR-PROJECT.supabase.co/rest/v1/YOUR_TABLE?select=*&amp;limit=5" \
+  -H "apikey: YOUR_ANON_KEY"</pre>
+
+<p>An empty array means the policy is doing its job. Rows of real data mean that
+table is readable by anyone right now. Then try writing, which people skip:</p>
+
+<pre class="block">curl -X POST "https://YOUR-PROJECT.supabase.co/rest/v1/YOUR_TABLE" \
+  -H "apikey: YOUR_ANON_KEY" -H "Content-Type: application/json" \
+  -d '{"id":"00000000-0000-0000-0000-000000000000"}'</pre>
+
+<p>Anything other than a refusal means a stranger can insert rows into your
+database.</p>
+
+<h2>Two things that quietly make it unsafe</h2>
+
+<p><b>A table with Row Level Security switched off.</b> Supabase serves every table
+in the public schema over REST. Without policies, the anon key reaches all of it.
+List them:</p>
+
+<pre class="block">select tablename, rowsecurity from pg_tables
+where schemaname = 'public' order by rowsecurity, tablename;</pre>
+
+<p><b>A policy that passes for everyone.</b> The shield in the dashboard shows
+Row Level Security is on. It does not show whether the policy restricts anyone:</p>
+
+<pre class="block">select tablename, policyname, roles, qual as using_clause
+from pg_policies where schemaname = 'public';</pre>
+
+<p>A <code>using_clause</code> of <code>true</code> granted to <code>anon</code>
+is a shield with nothing behind it.</p>
+
+<h2>What to do if you leaked the wrong key</h2>
+
+<p>Rotate the secret key first, before cleaning anything up, because cleaning
+first only signals which value mattered. Then read the logs for the window between
+the deploy and the rotation, looking for bulk reads of tables an ordinary user
+would never touch. Then move the key into server-only code with no public prefix,
+where the browser simply cannot see it.</p>
+
+<p>And leave the anon key alone. Rotating it breaks every deployed client and
+fixes nothing, because it was never the thing protecting you.</p>
+<h2>Related</h2>
+<ul class="checks"><li><a href="new-row-violates-row-level-security-policy.html">"new row violates row-level security policy"</a></li><li><a href="is-my-supabase-database-public.html">Is my Supabase database public?</a></li><li><a href="next-public-supabase-service-role-key.html">NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY</a></li><li><a href="supabase-rls-disabled-in-public.html">RLS Disabled in Public</a></li><li><a href="supabase-returns-empty-array.html">Supabase returns an empty array but the rows are there</a></li><li><a href="supabase-security-scanner.html">Supabase security scanner</a></li></ul>
+
+<hr>
+<h2>Check your own project</h2>
+<p>One command. No install, no signup, and it never touches the network. It reads
+your repository and tells you which tables are reachable and which keys are exposed,
+with the fix beside each finding.</p>
+<pre class="block">npx github:humora2504/vibeproof .</pre>
+<p class="small muted">Free and MIT licensed. If you want the policies generated for
+your own schema, and a script that proves an anonymous visitor is refused, there is a
+<a href="./#pack" data-track="content-to-pack">$19 Fix Pack</a>. The scanner stays free either way.</p>
+</section></main>
+<footer class="site"><div class="wrap"><div class="row">
+  <span>vibeproof &middot; MIT</span>
+  <span><a href="privacy.html">Privacy</a> &nbsp; <a href="terms.html">Terms</a> &nbsp; <a href="mailto:hugo@vystral.com">hugo@vystral.com</a></span>
+</div></div></footer>
+<script src="track.js"></script>
+</body>
+</html>

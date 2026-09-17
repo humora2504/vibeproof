@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Free Supabase security scanner: find every unprotected table</title>
+<meta name="description" content="An open-source command that reads your repository and reports tables without Row Level Security, permissive policies, public buckets and exposed keys. Runs offline, sends nothing.">
+<link rel="canonical" href="https://humora2504.github.io/vibeproof/supabase-security-scanner.html">
+<meta property="og:title" content="Free Supabase security scanner: find every unprotected table">
+<meta property="og:description" content="An open-source command that reads your repository and reports tables without Row Level Security, permissive policies, public buckets and exposed keys. Runs offline, sends nothing.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://humora2504.github.io/vibeproof/supabase-security-scanner.html">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128274;</text></svg>">
+<link rel="stylesheet" href="style.css">
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Supabase security scanner", "description": "An open-source command that reads your repository and reports tables without Row Level Security, permissive policies, public buckets and exposed keys. Runs offline, sends nothing.", "url": "https://humora2504.github.io/vibeproof/supabase-security-scanner.html", "datePublished": "2026-09-18", "dateModified": "2026-09-18", "author": {"@type": "Organization", "name": "vibeproof"}}, {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Does the scanner send my code anywhere?", "acceptedAnswer": {"@type": "Answer", "text": "No. It runs entirely on your machine and makes no network requests at all. The source is public, so you can confirm that before running it."}}, {"@type": "Question", "name": "Does it write to my database or my repository?", "acceptedAnswer": {"@type": "Answer", "text": "No. It only reads files. It never connects to your database, never modifies anything and never creates a file."}}, {"@type": "Question", "name": "Is a clean result a guarantee that I am secure?", "acceptedAnswer": {"@type": "Answer", "text": "No. It checks a specific and common set of mistakes about who can reach your data. It does not review your application logic, your dependencies or your infrastructure, and it is not a certification."}}]}]</script>
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="./"><b>&#9632;</b> vibeproof</a>
+  <nav><a href="./">Home</a> <a href="./#pack">Fix Pack</a></nav>
+</div></header>
+<main class="wrap"><section class="hero">
+<h1>Supabase security scanner</h1>
+
+<p class="lede">One command, no install, no signup, and nothing leaves your
+machine. It reads your repository and tells you which tables are reachable and
+which keys are exposed, with the fix beside each finding.</p>
+
+<pre class="block">npx github:humora2504/vibeproof .</pre>
+
+<h2>What it checks</h2>
+
+<p><b>Database access</b></p>
+<ul class="checks">
+<li>Tables created without Row Level Security, read from your migration files</li>
+<li>Policies that pass for everyone, such as <code>using (true)</code> granted to <code>anon</code></li>
+<li>Write privileges granted straight to the anonymous role</li>
+<li>Firebase and Firestore rules that say <code>allow read, write: if true</code></li>
+<li>Storage buckets created public</li>
+</ul>
+
+<p><b>Credentials</b></p>
+<ul class="checks">
+<li>Supabase <code>service_role</code> keys, decoded from the token rather than guessed at</li>
+<li>Stripe, OpenAI, Anthropic, AWS, Google, GitHub, Slack, SendGrid and Resend keys</li>
+<li>Secrets exposed through <code>NEXT_PUBLIC_</code>, <code>VITE_</code>, <code>EXPO_PUBLIC_</code> and similar</li>
+<li>Database connection strings carrying a password</li>
+<li>Env files that git is tracking</li>
+</ul>
+
+<p><b>Application</b></p>
+<ul class="checks">
+<li>Admin database clients built in code that ships to the browser</li>
+<li>Endpoints and server actions that write without checking who is calling</li>
+<li>CORS wildcards combined with credentials, and authentication bypass flags left on</li>
+<li>Session secrets that are empty or too short, and SQL built by joining strings</li>
+</ul>
+
+<h2>What it deliberately does not flag</h2>
+
+<p>Your Supabase anon key. That key is meant to be public and ships in every
+frontend bundle by design. A scanner that shouts about it trains you to ignore
+scanners, which is worse than saying nothing. It checks whether Row Level Security
+is actually protecting you instead, because that is what decides what the anon key
+can reach.</p>
+
+<h2>What a finding looks like</h2>
+
+<pre class="block">CRITICAL   Table "invoices" has no Row Level Security
+    supabase/migrations/001_init.sql:14
+    Supabase exposes every table in the public schema over a REST
+    endpoint. Without Row Level Security, anyone holding your anon
+    key, which ships in your frontend, can read and write this table.
+    Fix: alter table public.invoices enable row level security;</pre>
+
+<p>Every finding carries the reason and the fix. Evidence is redacted, so you can
+paste the output into an issue without leaking the key it just found.</p>
+
+<h2>As a gate on every pull request</h2>
+
+<pre class="block">- uses: humora2504/vibeproof@v1
+  with:
+    fail-on: high</pre>
+
+<p>Findings appear as annotations on the diff and the build fails. A key that
+cannot be merged cannot leak.</p>
+
+<h2>What it is not</h2>
+
+<p>It is not a security audit or a certification, and a clean result is not a
+promise that you are safe. It checks a specific, common and damaging set of
+mistakes. Anyone selling certainty at this price is selling something else.</p>
+
+<p>It is MIT licensed with 29 tests, including a deliberately correct project that
+must produce zero findings. False positives are treated as bugs, because a scanner
+you learn to ignore protects nobody.</p>
+
+<h2>Fixing what it finds</h2>
+
+<p>Every finding prints its own fix, and for most projects that is enough. If you
+would rather have the policies generated for your own schema, with a script that
+creates two throwaway users and proves from outside that an anonymous visitor and
+the wrong logged-in user are both refused, that is the
+<a href="./#pack" data-track="scanner-page-to-pack">$19 Fix Pack</a>. The scanner
+stays free either way.</p>
+<h2>Related</h2>
+<ul class="checks"><li><a href="new-row-violates-row-level-security-policy.html">"new row violates row-level security policy"</a></li><li><a href="is-my-supabase-database-public.html">Is my Supabase database public?</a></li><li><a href="next-public-supabase-service-role-key.html">NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY</a></li><li><a href="supabase-rls-disabled-in-public.html">RLS Disabled in Public</a></li><li><a href="supabase-returns-empty-array.html">Supabase returns an empty array but the rows are there</a></li><li><a href="is-supabase-anon-key-safe-to-expose.html">Is it safe to expose the Supabase anon key?</a></li></ul>
+
+<hr>
+<h2>Check your own project</h2>
+<p>One command. No install, no signup, and it never touches the network. It reads
+your repository and tells you which tables are reachable and which keys are exposed,
+with the fix beside each finding.</p>
+<pre class="block">npx github:humora2504/vibeproof .</pre>
+<p class="small muted">Free and MIT licensed. If you want the policies generated for
+your own schema, and a script that proves an anonymous visitor is refused, there is a
+<a href="./#pack" data-track="content-to-pack">$19 Fix Pack</a>. The scanner stays free either way.</p>
+</section></main>
+<footer class="site"><div class="wrap"><div class="row">
+  <span>vibeproof &middot; MIT</span>
+  <span><a href="privacy.html">Privacy</a> &nbsp; <a href="terms.html">Terms</a> &nbsp; <a href="mailto:hugo@vystral.com">hugo@vystral.com</a></span>
+</div></div></footer>
+<script src="track.js"></script>
+</body>
+</html>
