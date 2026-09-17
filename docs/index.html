@@ -270,9 +270,11 @@
   <h2>Guides</h2>
   <p>Written for the moment you are actually in, with the fix rather than the theory.</p>
   <ul class="checks">
-    <li><a href="new-row-violates-row-level-security-policy.html" data-track="guide-rls-error">&ldquo;new row violates row-level security policy&rdquo;</a> &mdash; the four causes, in the order worth checking.</li>
-    <li><a href="is-my-supabase-database-public.html" data-track="guide-is-public">Is my Supabase database public?</a> &mdash; how to check from outside, in one request.</li>
-    <li><a href="next-public-supabase-service-role-key.html" data-track="guide-service-key">NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY</a> &mdash; what it gives away, and what to do first.</li>
+    <li><a href="new-row-violates-row-level-security-policy.html" data-track="guide-1">"new row violates row-level security policy"</a> &mdash; the supabase insert error explained properly: why it happens, the four causes in order of likelihood, and the policy that actually fixes each one</li>
+    <li><a href="is-my-supabase-database-public.html" data-track="guide-2">Is my Supabase database public?</a> &mdash; your anon key is in your frontend by design</li>
+    <li><a href="next-public-supabase-service-role-key.html" data-track="guide-3">NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY</a> &mdash; putting the service role key behind a next_public_ prefix inlines it into your javascript bundle</li>
+    <li><a href="supabase-rls-disabled-in-public.html" data-track="guide-4">RLS Disabled in Public</a> &mdash; supabase advisor lint 0013 explained: exactly what a table without row level security exposes, how to list every affected table, and the trap waiting after you enable it</li>
+    <li><a href="supabase-returns-empty-array.html" data-track="guide-5">Supabase returns an empty array but the rows are there</a> &mdash; row level security does not error when it blocks a read</li>
   </ul>
 </section>
 

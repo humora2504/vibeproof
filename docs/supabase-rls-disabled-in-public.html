@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RLS Disabled in Public: what Supabase is warning you about, and how bad it is</title>
+<meta name="description" content="Supabase advisor lint 0013 explained: exactly what a table without Row Level Security exposes, how to list every affected table, and the trap waiting after you enable it.">
+<link rel="canonical" href="https://humora2504.github.io/vibeproof/supabase-rls-disabled-in-public.html">
+<meta property="og:title" content="RLS Disabled in Public: what Supabase is warning you about, and how bad it is">
+<meta property="og:description" content="Supabase advisor lint 0013 explained: exactly what a table without Row Level Security exposes, how to list every affected table, and the trap waiting after you enable it.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://humora2504.github.io/vibeproof/supabase-rls-disabled-in-public.html">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128274;</text></svg>">
+<link rel="stylesheet" href="style.css">
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "TechArticle", "headline": "RLS Disabled in Public", "description": "Supabase advisor lint 0013 explained: exactly what a table without Row Level Security exposes, how to list every affected table, and the trap waiting after you enable it.", "url": "https://humora2504.github.io/vibeproof/supabase-rls-disabled-in-public.html", "datePublished": "2026-09-18", "dateModified": "2026-09-18", "author": {"@type": "Organization", "name": "vibeproof"}}, {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "What does \"RLS Disabled in Public\" mean in Supabase?", "acceptedAnswer": {"@type": "Answer", "text": "A table in the public schema has Row Level Security switched off. Supabase serves that schema over a REST endpoint, so the table can be read and usually written by anyone holding your anon key, which ships inside your frontend bundle."}}, {"@type": "Question", "name": "Is it only a read problem?", "acceptedAnswer": {"@type": "Answer", "text": "No. Without Row Level Security the anonymous role typically holds insert, update and delete privileges too, so a stranger can change or remove rows, not just read them."}}, {"@type": "Question", "name": "I enabled RLS and now my app returns nothing. What happened?", "acceptedAnswer": {"@type": "Answer", "text": "Enabling Row Level Security denies everything until a policy allows it. An empty result is the expected state between enabling it and writing the first policy."}}]}]</script>
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="./"><b>&#9632;</b> vibeproof</a>
+  <nav><a href="./">Home</a> <a href="./#pack">Fix Pack</a></nav>
+</div></header>
+<main class="wrap"><section class="hero">
+<h1>RLS Disabled in Public</h1>
+
+<p class="lede">Supabase is telling you that a table in the <code>public</code>
+schema has Row Level Security switched off. That schema is served over a REST
+endpoint, and the key that reaches it is in your frontend bundle. So the honest
+reading of this warning is: this table is currently open to the internet.</p>
+
+<p>The warning is advisor lint <code>0013</code>. It is accurate and it is worth
+acting on the same day.</p>
+
+<h2>What is actually exposed</h2>
+
+<p>People assume this means someone could read the table. It usually means more
+than that. When Supabase creates a table through the dashboard it grants the
+<code>anon</code> and <code>authenticated</code> roles the full set of
+privileges, and Row Level Security is the only thing that then narrows what those
+roles can reach. With it off, there is nothing narrowing anything.</p>
+
+<p>Check what the anonymous role can do on your own project:</p>
+
+<pre class="block">select table_name, string_agg(privilege_type, ', ' order by privilege_type) as can
+from information_schema.role_table_grants
+where grantee = 'anon' and table_schema = 'public'
+group by table_name
+order by table_name;</pre>
+
+<p>If a table without Row Level Security shows <code>DELETE</code> in that list,
+an unauthenticated request can empty it.</p>
+
+<h2>List every affected table, not just the one in the warning</h2>
+
+<p>The advisor shows them one at a time. Get the whole picture in one query:</p>
+
+<pre class="block">select tablename, rowsecurity as rls_enabled
+from pg_tables
+where schemaname = 'public'
+order by rowsecurity, tablename;</pre>
+
+<p>Everything with <code>rls_enabled = false</code> is in the same state as the
+table Supabase warned you about.</p>
+
+<p>Worth doing next, because it catches the subtler case: a table can have Row
+Level Security enabled and still be open, if the policy attached to it passes for
+everyone.</p>
+
+<pre class="block">select tablename, policyname, roles, qual as using_clause, with_check
+from pg_policies
+where schemaname = 'public'
+order by tablename;</pre>
+
+<p>A <code>using_clause</code> of <code>true</code> granted to <code>anon</code>
+or <code>public</code> is a shield with nothing behind it.</p>
+
+<h2>Turn it on, and expect your app to break</h2>
+
+<p>This is the part that makes people undo the fix, so it is worth saying plainly.
+Enabling Row Level Security denies everything until a policy allows it. Between
+those two moments, queries return empty arrays and inserts fail. That is the
+protection working, not a new bug.</p>
+
+<pre class="block">alter table public.invoices enable row level security;
+alter table public.invoices force row level security;   -- applies to the table owner too</pre>
+
+<p>Then allow the access you actually intend:</p>
+
+<pre class="block">revoke all on public.invoices from anon;
+grant select, insert, update, delete on public.invoices to authenticated;
+
+create policy "own invoices" on public.invoices
+  for all to authenticated
+  using ( (select auth.uid()) = user_id )
+  with check ( (select auth.uid()) = user_id );</pre>
+
+<p>The <code>(select auth.uid())</code> wrapping is not cosmetic. It lets Postgres
+evaluate the call once for the whole statement instead of once per row, which is
+the difference between a policy that scales and one that turns every query into a
+table scan. Index the column the policy compares against, too:</p>
+
+<pre class="block">create index if not exists invoices_user_id_idx on public.invoices (user_id);</pre>
+
+<h2>If the table really is public data</h2>
+
+<p>Reference data that everyone should read is a legitimate case. Say so
+explicitly rather than by omission, and keep writes closed:</p>
+
+<pre class="block">alter table public.countries enable row level security;
+revoke all on public.countries from anon;
+grant select on public.countries to anon, authenticated;
+
+create policy "public read" on public.countries
+  for select to anon, authenticated using ( true );</pre>
+
+<p>The difference between this and an unprotected table is that this one is a
+decision you can point at in a migration.</p>
+
+<h2>Find out whether anyone used the gap</h2>
+
+<p>Enabling the policy stops what happens next. It says nothing about what already
+happened. In the Supabase dashboard, open Logs and filter to the window between
+when the table was created and now. What you are looking for is bulk reads of a
+table an ordinary user of your app would never query directly, requests from
+addresses with no matching sign-in, and deletes you cannot account for.</p>
+
+<p>If a service key was also exposed, rotate it before anything else. Deleting the
+line does not help: the old value stays in your git history.</p>
+
+<h2>The mistake to avoid while fixing this</h2>
+
+<p>Do not test in the SQL editor and conclude you are safe. The editor runs as a
+privileged role and bypasses Row Level Security entirely, so a query that returns
+rows there tells you nothing about what a visitor can reach. Test with an ordinary
+client using your anon key, and then test again as a second signed-in user to
+confirm they cannot see the first one's rows.</p>
+<h2>Related</h2>
+<ul class="checks"><li><a href="new-row-violates-row-level-security-policy.html">"new row violates row-level security policy"</a></li><li><a href="is-my-supabase-database-public.html">Is my Supabase database public?</a></li><li><a href="next-public-supabase-service-role-key.html">NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY</a></li><li><a href="supabase-returns-empty-array.html">Supabase returns an empty array but the rows are there</a></li></ul>
+
+<hr>
+<h2>Check your own project</h2>
+<p>One command. No install, no signup, and it never touches the network. It reads
+your repository and tells you which tables are reachable and which keys are exposed,
+with the fix beside each finding.</p>
+<pre class="block">npx github:humora2504/vibeproof .</pre>
+<p class="small muted">Free and MIT licensed. If you want the policies generated for
+your own schema, and a script that proves an anonymous visitor is refused, there is a
+<a href="./#pack" data-track="content-to-pack">$19 Fix Pack</a>. The scanner stays free either way.</p>
+</section></main>
+<footer class="site"><div class="wrap"><div class="row">
+  <span>vibeproof &middot; MIT</span>
+  <span><a href="privacy.html">Privacy</a> &nbsp; <a href="terms.html">Terms</a> &nbsp; <a href="mailto:hugo@vystral.com">hugo@vystral.com</a></span>
+</div></div></footer>
+<script src="track.js"></script>
+</body>
+</html>

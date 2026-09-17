@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Supabase returns an empty array but the rows exist</title>
+<meta name="description" content="Row Level Security does not error when it blocks a read. It filters silently, so a denied row and a row that never existed look identical. How to tell which you have.">
+<link rel="canonical" href="https://humora2504.github.io/vibeproof/supabase-returns-empty-array.html">
+<meta property="og:title" content="Supabase returns an empty array but the rows exist">
+<meta property="og:description" content="Row Level Security does not error when it blocks a read. It filters silently, so a denied row and a row that never existed look identical. How to tell which you have.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://humora2504.github.io/vibeproof/supabase-returns-empty-array.html">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128274;</text></svg>">
+<link rel="stylesheet" href="style.css">
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Supabase returns an empty array but the rows are there", "description": "Row Level Security does not error when it blocks a read. It filters silently, so a denied row and a row that never existed look identical. How to tell which you have.", "url": "https://humora2504.github.io/vibeproof/supabase-returns-empty-array.html", "datePublished": "2026-09-18", "dateModified": "2026-09-18", "author": {"@type": "Organization", "name": "vibeproof"}}, {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Why does Supabase return [] instead of an error when RLS blocks a read?", "acceptedAnswer": {"@type": "Answer", "text": "Under Row Level Security a SELECT is filtered, not refused. Rows you are not allowed to see are removed from the result, so you receive an empty array with no error. A denied row and a nonexistent row are identical to the client."}}, {"@type": "Question", "name": "It works in the SQL editor but not in my app. Why?", "acceptedAnswer": {"@type": "Answer", "text": "The SQL editor runs as a privileged role that bypasses Row Level Security. Your app runs as anon or authenticated, which does not. A query that works in the editor proves nothing."}}, {"@type": "Question", "name": "It worked yesterday and now returns nothing. What changed?", "acceptedAnswer": {"@type": "Answer", "text": "The usual cause is that the client was using the service role key during prototyping and has since been switched to the anon key, which is subject to policies for the first time."}}]}]</script>
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="./"><b>&#9632;</b> vibeproof</a>
+  <nav><a href="./">Home</a> <a href="./#pack">Fix Pack</a></nav>
+</div></header>
+<main class="wrap"><section class="hero">
+<h1>Supabase returns an empty array but the rows are there</h1>
+
+<p class="lede">There is no error, no warning and nothing in the logs. You get
+<code>[]</code>, the rows are visibly there in the table editor, and nothing tells
+you why. This is the single most confusing behaviour in Supabase, and it is
+deliberate.</p>
+
+<h2>Why it is silent</h2>
+
+<p>Row Level Security does not refuse a <code>SELECT</code>. It filters it. Rows
+you are not permitted to see are removed from the result before it reaches you,
+exactly as if they did not exist. There is nothing to report, so nothing is
+reported.</p>
+
+<p>That has an implication worth sitting with: <b>a blocked row and a missing row
+are indistinguishable from the client</b>. Your app cannot tell the difference,
+and neither can you by looking at the response.</p>
+
+<p>The same property runs in the other direction, which is the part that costs
+people money. A table with no policy at all is also silent. Nothing warns you that
+every row is reachable by anyone. Silence is the default in both states.</p>
+
+<h2>Isolate it in three steps</h2>
+
+<h3>1. Find out who the database thinks you are</h3>
+
+<p>Most empty arrays are an absent session rather than a wrong policy. Run this in
+the client that is actually failing, not in a different one:</p>
+
+<pre class="block">const { data: { user } } = await supabase.auth.getUser();
+console.log('the database will see auth.uid() =', user?.id ?? 'null');</pre>
+
+<p>If that prints <code>null</code>, every policy comparing
+<code>auth.uid()</code> to a column is false and the correct result is an empty
+array. This is routine in server-rendered pages, where the browser holds a session
+and the server client was created without one.</p>
+
+<h3>2. Read the policy that applies</h3>
+
+<pre class="block">select policyname, cmd, roles, qual as using_clause, with_check
+from pg_policies
+where schemaname = 'public' and tablename = 'invoices';</pre>
+
+<p>Two things to check. Whether any policy covers <code>SELECT</code> at all, and
+whether its <code>roles</code> column includes the role you are actually using. A
+policy written <code>to authenticated</code> does nothing for a logged-out
+visitor, and one written <code>to anon</code> does nothing for a logged-in one.
+The two roles do not inherit from each other.</p>
+
+<h3>3. Confirm from outside, with your own key</h3>
+
+<pre class="block">curl "https://YOUR-PROJECT.supabase.co/rest/v1/invoices?select=*&amp;limit=5" \
+  -H "apikey: YOUR_ANON_KEY"</pre>
+
+<p>This is the request an anonymous visitor makes. If it returns rows, your table
+is readable by anyone and the empty array in your app has a different cause. If it
+returns <code>[]</code>, the policy is doing its job and the problem is the
+session.</p>
+
+<h2>The causes, in the order they actually occur</h2>
+
+<ul class="checks">
+<li><b>No session.</b> <code>auth.uid()</code> is null, so ownership checks fail.
+Most common by a distance.</li>
+<li><b>Row Level Security enabled with no policy.</b> Enabling it denies
+everything until something allows it. An empty table is the expected state in
+between.</li>
+<li><b>The policy is granted to the wrong role.</b> See step 2.</li>
+<li><b>The owner column is null on the existing rows.</b> Rows created before the
+column existed will never match <code>auth.uid() = user_id</code>.</li>
+<li><b>It used to use the service role key.</b> During prototyping the client was
+built with a key that bypasses policies. Swapping to the anon key subjects it to
+them for the first time, and everything goes quiet.</li>
+</ul>
+
+<h2>What not to do</h2>
+
+<p>Disabling Row Level Security makes the rows come back and makes the table
+readable by anyone holding your anon key, which is in your bundle. It converts a
+confusing bug into a silent exposure, and the silence is the same, so you will not
+notice.</p>
+
+<p>Likewise <code>using (true)</code> makes the query work and makes the data
+public. If you write it deliberately for reference data, restrict it to
+<code>for select</code> and say so in a comment. If you write it to make an error
+go away, you have removed the protection rather than fixed the query.</p>
+
+<h2>Prove it rather than assume it</h2>
+
+<p>Because the failure mode is silence, the only reliable check is an explicit
+one: sign in as one user, create a row, then sign in as a different user and
+confirm that the row is not visible, and that they cannot update or delete it.
+Anything less and you are trusting a dashboard shield that does not tell you what
+your policies actually do.</p>
+<h2>Related</h2>
+<ul class="checks"><li><a href="new-row-violates-row-level-security-policy.html">"new row violates row-level security policy"</a></li><li><a href="is-my-supabase-database-public.html">Is my Supabase database public?</a></li><li><a href="next-public-supabase-service-role-key.html">NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY</a></li><li><a href="supabase-rls-disabled-in-public.html">RLS Disabled in Public</a></li></ul>
+
+<hr>
+<h2>Check your own project</h2>
+<p>One command. No install, no signup, and it never touches the network. It reads
+your repository and tells you which tables are reachable and which keys are exposed,
+with the fix beside each finding.</p>
+<pre class="block">npx github:humora2504/vibeproof .</pre>
+<p class="small muted">Free and MIT licensed. If you want the policies generated for
+your own schema, and a script that proves an anonymous visitor is refused, there is a
+<a href="./#pack" data-track="content-to-pack">$19 Fix Pack</a>. The scanner stays free either way.</p>
+</section></main>
+<footer class="site"><div class="wrap"><div class="row">
+  <span>vibeproof &middot; MIT</span>
+  <span><a href="privacy.html">Privacy</a> &nbsp; <a href="terms.html">Terms</a> &nbsp; <a href="mailto:hugo@vystral.com">hugo@vystral.com</a></span>
+</div></div></footer>
+<script src="track.js"></script>
+</body>
+</html>
