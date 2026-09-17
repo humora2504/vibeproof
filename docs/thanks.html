@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your Fix Pack — vibeproof</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128274;</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="./"><b>&#9632;</b> vibeproof</a>
+</div></header>
+
+<main class="wrap">
+<section class="hero">
+  <h1 id="title">Confirming your payment</h1>
+  <p class="lede" id="sub">
+    This waits for Stripe to confirm the charge before it shows you anything,
+    so the download is never handed out on the strength of a URL alone.
+    It usually takes under a minute.
+  </p>
+
+  <div id="pending">
+    <div class="card">
+      <p><b id="status">Checking with Stripe…</b></p>
+      <p class="small muted" id="elapsed">Keep this tab open. It refreshes itself.</p>
+    </div>
+    <p class="small muted" style="margin-top:18px">
+      Taking more than a few minutes? Bookmark this exact URL and open it again later,
+      it will still work. If it never appears, reply to your Stripe receipt or write to
+      <a href="mailto:hugo@vystral.com">hugo@vystral.com</a> and you will get the pack or
+      your money back.
+    </p>
+  </div>
+
+  <div id="ready" hidden>
+    <ul class="checks">
+      <li>Payment confirmed by Stripe</li>
+      <li>Your pack is below, and stays at this URL</li>
+    </ul>
+    <div class="card" style="margin:22px 0">
+      <h3 style="margin-top:0">Download</h3>
+      <p><a class="btn" id="dl-zip" href="#" download data-track="download-zip">vibeproof-fixpack.zip</a></p>
+      <p class="small muted" style="margin-bottom:0">Individual files: <span id="file-list"></span></p>
+    </div>
+
+    <h2>Run it</h2>
+    <ol class="steps">
+      <li><b>Unzip it anywhere</b> It has no dependencies and installs nothing.</li>
+      <li><b>Point it at your project</b><pre class="block">node vibeproof-fix.js /path/to/your/project</pre>
+        It reads your SQL migrations and writes <code>rls_policies.sql</code>,
+        <code>rls_tests.mjs</code>, <code>REPORT.md</code>, <code>ci.yml</code> and the playbooks
+        into a <code>vibeproof-fix</code> folder.</li>
+      <li><b>Read REPORT.md first</b> It lists every table, which column it took to be the
+        owner, and which tables it could not classify. Those are set to deny everything
+        until you decide.</li>
+      <li><b>Apply the SQL to a branch or a copy</b><pre class="block">psql "$DATABASE_URL" -f vibeproof-fix/rls_policies.sql</pre></li>
+      <li><b>Prove it</b><pre class="block">npm i @supabase/supabase-js
+SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... \
+  node vibeproof-fix/rls_tests.mjs</pre>
+        Run this against a development or branch database: it creates and deletes rows and
+        two throwaway users.</li>
+      <li><b>Stop it regressing</b> Copy <code>ci.yml</code> to
+        <code>.github/workflows/vibeproof.yml</code>.</li>
+    </ol>
+
+    <div class="note">
+      Something not working, or not what the page promised? Reply to your Stripe receipt,
+      or write to <a href="mailto:hugo@vystral.com">hugo@vystral.com</a>. Refund within 30
+      days, no form, no questions.
+    </div>
+  </div>
+
+  <div id="failed" hidden>
+    <div class="card">
+      <p><b>This link has no confirmed payment attached to it.</b></p>
+      <p class="small muted">If you have just paid, give it a minute and reload. If you
+      reached this page by accident, nothing has been charged.
+      Questions: <a href="mailto:hugo@vystral.com">hugo@vystral.com</a></p>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="site"><div class="wrap"><div class="row">
+  <span>vibeproof</span>
+  <span><a href="privacy.html">Privacy</a> &nbsp; <a href="terms.html">Terms</a></span>
+</div></div></footer>
+
+<script src="track.js"></script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var sid = q.get('s') || q.get('session_id') || '';
+  var pending = document.getElementById('pending');
+  var ready = document.getElementById('ready');
+  var failed = document.getElementById('failed');
+  var status = document.getElementById('status');
+  var elapsed = document.getElementById('elapsed');
+
+  function show(el) { [pending, ready, failed].forEach(function (x) { x.hidden = x !== el; }); }
+
+  if (!sid) { show(failed); document.getElementById('title').textContent = 'Nothing to show'; return; }
+
+  // The delivery path is the hash of the session id, so it cannot be guessed,
+  // and it only exists once the poller has seen Stripe mark the payment paid.
+  function sha256Hex(s) {
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)).then(function (buf) {
+      return Array.from(new Uint8Array(buf)).map(function (b) {
+        return b.toString(16).padStart(2, '0');
+      }).join('');
+    });
+  }
+
+  var started = Date.now();
+  var tries = 0;
+
+  sha256Hex(sid).then(function (hash) {
+    var dir = 'd/' + hash;
+
+    function attempt() {
+      tries++;
+      fetch(dir + '/manifest.json?' + Date.now(), { cache: 'no-store' })
+        .then(function (r) { if (!r.ok) throw new Error('not yet'); return r.json(); })
+        .then(function (m) {
+          document.getElementById('title').textContent = 'Your Fix Pack is ready';
+          document.getElementById('sub').textContent =
+            'Payment confirmed. This page stays at this URL, so you can come back to it.';
+          document.getElementById('dl-zip').href = dir + '/' + m.zip;
+          var list = document.getElementById('file-list');
+          list.innerHTML = m.files.map(function (f) {
+            return '<a href="' + dir + '/' + f + '" download>' + f + '</a>';
+          }).join(' &middot; ');
+          show(ready);
+          if (window.vtTrack) window.vtTrack('delivered', { t: Math.round((Date.now() - started) / 1000) });
+        })
+        .catch(function () {
+          var secs = Math.round((Date.now() - started) / 1000);
+          if (secs > 900) {
+            status.textContent = 'Still waiting on Stripe.';
+            elapsed.innerHTML = 'Bookmark this URL and reopen it later, it will still work. ' +
+              'Or reply to your Stripe receipt and it will be sorted by hand.';
+            return;
+          }
+          status.textContent = 'Checking with Stripe…';
+          elapsed.textContent = 'Waiting ' + secs + 's. Keep this tab open, it refreshes itself.';
+          setTimeout(attempt, tries < 12 ? 5000 : 15000);
+        });
+    }
+    attempt();
+  });
+})();
+</script>
+</body>
+</html>

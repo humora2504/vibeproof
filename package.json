@@ -1,0 +1,12 @@
+{
+  "name": "vibeproof",
+  "version": "1.0.0",
+  "description": "Pre-deploy security scan for AI-built apps. Finds exposed keys, tables without Row Level Security and open Firebase rules before your users do.",
+  "bin": { "vibeproof": "bin/vibeproof.js" },
+  "main": "lib/scan.js",
+  "scripts": { "test": "node test/run.js" },
+  "engines": { "node": ">=18" },
+  "keywords": ["security", "supabase", "rls", "firebase", "secrets", "vibe-coding", "audit", "lovable", "bolt", "cursor"],
+  "license": "MIT",
+  "files": ["bin", "lib", "README.md", "LICENSE"]
+}

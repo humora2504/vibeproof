@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>vibeproof — lock down your Supabase before someone else does</title>
+<meta name="description" content="A free scanner that finds exposed keys and tables without Row Level Security in AI-built apps, and a $19 pack that generates the policies for your own schema plus a test that proves the lockdown works.">
+<meta property="og:title" content="vibeproof — lock down your Supabase before someone else does">
+<meta property="og:description" content="Free scanner for exposed keys and open tables. $19 Fix Pack generates the Row Level Security for your schema and proves it works.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128274;</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="./"><b>&#9632;</b> vibeproof</a>
+  <nav>
+    <a href="#how">How it works</a>
+    <a href="#pack">Fix Pack</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+</div></header>
+
+<main class="wrap">
+
+<section class="hero">
+  <span class="eyebrow">Supabase &middot; Firebase &middot; Next.js</span>
+  <h1>Your database is probably open right now.</h1>
+  <p class="lede">
+    An independent scan of 1,072 apps built with AI coding tools found security flaws in
+    98% of them, and 172 where anyone could delete data without logging in. Not obscure
+    flaws. Row Level Security switched off, and service keys sitting in the frontend bundle.
+  </p>
+
+  <div class="term">
+    <div class="term-bar"><i></i><i></i><i></i><span>npx github:humora2504/vibeproof</span></div>
+<pre><span class="c-dim">  vibeproof  v1.0.0
+  184 files - Supabase, Next.js - 61ms</span>
+
+  <span class="badge-crit"> CRITICAL </span>  <span class="c-white"><b>Table "invoices" has no Row Level Security</b></span>
+      <span class="c-dim">supabase/migrations/001_init.sql:14</span>
+      Supabase exposes every table in the public schema over a REST
+      endpoint. Without Row Level Security, anyone holding your anon
+      key, which ships in your frontend, can read and write this table.
+      <span class="c-green">Fix:</span> alter table public.invoices enable row level security;
+
+  <span class="badge-crit"> CRITICAL </span>  <span class="c-white"><b>Supabase service_role key is in code that ships to the browser</b></span>
+      <span class="c-dim">.env.local:3  -&gt; eyJhbG...Q1Ng (218 chars)</span>
+      The service_role key bypasses Row Level Security completely.
+      <span class="c-green">Fix:</span> Rotate it in the dashboard, then use it only in server code.
+
+  <span class="c-white"><b>Summary: </b></span><span class="c-red">7 critical</span><span class="c-dim"> - </span><span class="c-red">4 high</span><span class="c-dim"> - </span><span class="c-yellow">2 medium</span></pre>
+  </div>
+
+  <div class="cta">
+    <a class="btn ghost" href="#scan" data-track="cta-free-hero">Run the free scan</a>
+    <a class="btn" href="#pack" data-track="cta-pack-hero">Get the Fix Pack &mdash; $19</a>
+  </div>
+  <p class="price-note">The scanner is free and open source, for ever. The Fix Pack is a one-off $19. No account, no subscription.</p>
+</section>
+
+<section>
+  <h2>This is not a hypothetical</h2>
+  <div class="stat-row">
+    <div class="stat">
+      <b>98%</b>
+      <span>of 1,072 AI-built apps scanned had security flaws. 172 allowed unauthenticated deletes.</span>
+      <a href="https://www.symbioticsec.ai/blog/we-scanned-1-072-vibe-coded-apps-98-had-security-flaws" rel="nofollow noopener" target="_blank">Symbiotic Security, June 2026</a>
+    </div>
+    <div class="stat">
+      <b>88%</b>
+      <span>of 50 audited apps had Row Level Security disabled. 78% leaked secrets in the repository.</span>
+      <a href="https://dev.to/rishabh_kumar_6d865c83a4d/i-audited-50-vibe-coded-apps-heres-what-broke-1pb6" rel="nofollow noopener" target="_blank">Independent audit, May 2026</a>
+    </div>
+    <div class="stat">
+      <b>7%</b>
+      <span>of 1,764 Lovable and Bolt apps shipped with a wide-open database.</span>
+      <a href="https://dev.to/pat9000/7-of-vibe-coded-apps-ship-with-wide-open-databases-2hm2" rel="nofollow noopener" target="_blank">Survey, 2026</a>
+    </div>
+  </div>
+  <p class="muted small">
+    These are other people's numbers, not ours. We have sold nothing yet and have no
+    customers to quote, so there are no testimonials on this page.
+  </p>
+</section>
+
+<section id="scan">
+  <h2>Start with the free scan</h2>
+  <p>
+    One command, no install, no signup, nothing leaves your machine. It reads your
+    repository and tells you what is exposed, with the fix next to each finding.
+  </p>
+  <pre class="block">npx github:humora2504/vibeproof .</pre>
+  <ul class="checks">
+    <li>Tables created without Row Level Security, read straight from your migrations</li>
+    <li>Policies that pass for everyone, like <code>using (true)</code> granted to <code>anon</code></li>
+    <li>Service keys, Stripe keys and database passwords committed to the repo or exposed through a <code>NEXT_PUBLIC_</code> variable</li>
+    <li>Firebase rules that say <code>allow read, write: if true</code></li>
+    <li>Storage buckets left public, and endpoints that write without checking who is calling</li>
+  </ul>
+  <p class="small muted">
+    It runs offline, sends nothing anywhere, and prints redacted evidence so you can paste
+    the output somewhere without leaking the key it just found.
+    <a href="https://github.com/humora2504/vibeproof" rel="noopener" data-track="github-link">Read the source</a>.
+  </p>
+</section>
+
+<section id="pack">
+  <h2>Then fix it, and prove you fixed it</h2>
+  <p>
+    Finding the holes is the easy half. The hard half is writing correct policies for
+    every table, remembering that table privileges are checked before policies are, and
+    then <em>knowing</em> it worked rather than hoping. The dashboard showing a green
+    shield is not proof.
+  </p>
+
+  <p>The Fix Pack reads your migrations, works out who owns each row, and writes:</p>
+
+  <div class="grid two">
+    <div class="card">
+      <h3>rls_policies.sql</h3>
+      <p class="small">Policies for every table, matched to your ownership columns: user-owned, organisation-owned, or self-owned by a key referencing <code>auth.users</code>. Enables and forces Row Level Security, drops the permissive policies you already have, and revokes the table privileges from <code>anon</code> that people forget. One transaction.</p>
+    </div>
+    <div class="card">
+      <h3>rls_tests.mjs</h3>
+      <p class="small">The part nobody else gives you. It creates two throwaway users, writes a row for one, and then checks from outside that an anonymous visitor is refused, that the other user cannot read, change or delete that row, and that the owner still can. Then it deletes the test users.</p>
+    </div>
+    <div class="card">
+      <h3>REPORT.md</h3>
+      <p class="small">Every table, whether Row Level Security is on today, which column it assumed is the owner and how confident it is. Tables where no owner could be identified are set to deny everything and listed for you to decide, because a table that errors is safer than one that leaks.</p>
+    </div>
+    <div class="card">
+      <h3>ci.yml + 4 playbooks</h3>
+      <p class="small">A GitHub Actions gate that fails the build on a critical or high finding, so this cannot regress. Plus runbooks for rotating a leaked key in the right order, locking down storage, hardening server actions, and what to do in the first hour after a leak.</p>
+    </div>
+  </div>
+
+  <h3>What the proof looks like</h3>
+  <div class="term">
+    <div class="term-bar"><i></i><i></i><i></i><span>node rls_tests.mjs</span></div>
+<pre><span class="c-dim">  vibeproof :: Row Level Security proof
+  two test users created</span>
+
+  table: invoices
+  <span class="c-green">  PASS</span>  invoices: anonymous read is blocked
+  <span class="c-green">  PASS</span>  invoices: anonymous insert is blocked
+  <span class="c-green">  PASS</span>  invoices: another user cannot read this user's rows
+  <span class="c-green">  PASS</span>  invoices: another user cannot modify this user's row
+  <span class="c-green">  PASS</span>  invoices: another user cannot delete this user's row
+  <span class="c-green">  PASS</span>  invoices: the owner can still read their own row
+
+<span class="c-white">  30 passed, 0 failed</span>
+<span class="c-dim">  Every table above denied the anonymous visitor and the wrong user.</span></pre>
+  </div>
+  <p class="small muted">Before you apply the policies, that output is red. That contrast is the whole product.</p>
+
+  <h2 id="how">How it works</h2>
+  <ol class="steps">
+    <li><b>Pay $19 once</b> Stripe's own checkout. Card details never touch this site.</li>
+    <li><b>Download the pack</b> The download appears once Stripe confirms the payment, usually within a minute. Nothing is sent by email, so nothing gets lost in spam.</li>
+    <li><b>Run it on your project</b> <code>node vibeproof-fix.js .</code> It reads your migrations and writes the five files into a folder. Takes a second.</li>
+    <li><b>Read the SQL, then apply it</b> To a branch or a copy first. It is plain SQL with comments, not a black box.</li>
+    <li><b>Run the proof</b> <code>node rls_tests.mjs</code>. Green means an anonymous visitor and the wrong user were refused, checked from outside your app.</li>
+  </ol>
+  <p class="small muted">Total time from payment to a proven lockdown: about fifteen minutes on a normal project.</p>
+
+  <div class="buybox" id="buy">
+    <div class="amount">$19<small>one-off, not a subscription</small></div>
+    <p style="margin:14px 0 4px">
+      Works on any project with SQL migrations. Generates policies for as many tables as
+      you have, on as many projects as you own. Yours to keep, including the generator.
+    </p>
+    <div class="cta" style="margin-bottom:6px">
+      <a class="btn" id="buy-btn" href="#buy-unavailable" data-track="buy-main">Buy the Fix Pack &mdash; $19</a>
+      <span class="price-note" id="buy-note">Secure checkout by Stripe</span>
+    </div>
+    <p class="small muted" style="margin-bottom:0">
+      If it does not do what this page says it does, reply to your Stripe receipt within
+      30 days and you get your money back. No form to fill in.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2>Why not just use the free checklist</h2>
+  <table class="cmp">
+    <tr><th></th><th>Free checklists</th><th>Scanner subscriptions</th><th>vibeproof Fix Pack</th></tr>
+    <tr><td>Tells you what is wrong</td><td>Generic list</td><td>Yes, monthly</td><td>Yes, free, offline</td></tr>
+    <tr><td>Writes the policies for your schema</td><td>No</td><td>No</td><td>Yes</td></tr>
+    <tr><td>Proves the fix from outside</td><td>No</td><td>No</td><td>Yes</td></tr>
+    <tr><td>Stops it regressing</td><td>No</td><td>No</td><td>CI gate included</td></tr>
+    <tr><td>Cost</td><td>Free</td><td>$29&ndash;49 a month</td><td>$19 once</td></tr>
+  </table>
+  <p class="note">
+    If your project has three tables and you are comfortable writing policies, the free
+    scanner is genuinely all you need. Take it, it costs nothing. The pack is for the
+    case where you have twenty tables, a launch this week, and no appetite for finding
+    out later which one you missed.
+  </p>
+</section>
+
+<section id="faq">
+  <h2>Questions</h2>
+
+  <details><summary>Does anything leave my machine?</summary><div class="body">
+    <p>No. The scanner and the generator both run locally and make no network requests.
+    You can read the source of the scanner before you run it. Findings print redacted
+    evidence, so a key it finds is never echoed in full.</p>
+  </div></details>
+
+  <details><summary>Will it break my app?</summary><div class="body">
+    <p>It can, and that is deliberate for one case. Turning on Row Level Security denies
+    everything until a policy allows it, so a table that was silently world-readable will
+    start returning nothing until the right policy is in place. That is the point.</p>
+    <p>The generated SQL is a single transaction with comments, meant to be read before it
+    is run, and the report tells you which tables it was unsure about. Apply it to a branch
+    or a copy first. Tables where no owner column could be found are set to deny everything
+    and listed for your decision rather than guessed at.</p>
+  </div></details>
+
+  <details><summary>What if it cannot find my schema?</summary><div class="body">
+    <p>It reads SQL migrations from the usual places: <code>supabase/migrations</code>,
+    <code>migrations</code>, <code>db/migrations</code>, <code>prisma/migrations</code>,
+    <code>drizzle</code>, <code>sql</code> and <code>database</code>. If your schema only
+    exists in the Supabase dashboard, export it first with
+    <code>supabase db dump --schema public -f supabase/migrations/000_schema.sql</code>
+    and run it again. If that still does not work, ask for a refund.</p>
+  </div></details>
+
+  <details><summary>Is this a security certification?</summary><div class="body">
+    <p>No, and anyone selling you one for $19 is lying. It checks a specific, common and
+    damaging set of mistakes: access to your tables and your storage. It does not review
+    your application logic, your dependencies, or your infrastructure, and a clean result
+    is not a guarantee that you are secure.</p>
+  </div></details>
+
+  <details><summary>Firebase, Prisma, Drizzle, other databases?</summary><div class="body">
+    <p>The free scanner checks Firebase rules, Firestore and Realtime Database, alongside
+    Supabase and Postgres. The Fix Pack generates Postgres Row Level Security, so it
+    applies to Supabase and to any Postgres database. Prisma and Drizzle projects work as
+    long as their SQL migrations are in the repository. If you use Firebase only, the free
+    scanner is the useful half and the pack is not for you.</p>
+  </div></details>
+
+  <details><summary>Who made this?</summary><div class="body">
+    <p>One developer, working in the open. The scanner's source is on
+    <a href="https://github.com/humora2504/vibeproof" rel="noopener">GitHub</a>, including
+    its test suite. There are no customer testimonials on this page because there are no
+    customers yet. When there are, they will be real ones.</p>
+  </div></details>
+
+  <details><summary>How do I get a refund?</summary><div class="body">
+    <p>Reply to the Stripe receipt that lands in your inbox and say it did not work.
+    Within 30 days, no questions and no form. Stripe handles the refund itself.</p>
+  </div></details>
+</section>
+
+<hr>
+
+<section>
+  <h2>Run the free scan first</h2>
+  <p>Take the free half whether or not you ever buy anything. If it comes back clean, you
+  have lost thirty seconds. If it does not, you have found out from a terminal rather than
+  from a stranger.</p>
+  <pre class="block">npx github:humora2504/vibeproof .</pre>
+  <div class="cta">
+    <a class="btn" href="#buy" data-track="cta-pack-footer">Get the Fix Pack &mdash; $19</a>
+    <a class="btn ghost" href="https://github.com/humora2504/vibeproof" rel="noopener" data-track="cta-github-footer">Source on GitHub</a>
+  </div>
+</section>
+
+</main>
+
+<footer class="site"><div class="wrap"><div class="row">
+  <span>vibeproof &middot; scanner under the MIT licence</span>
+  <span>
+    <a href="privacy.html">Privacy</a> &nbsp;
+    <a href="terms.html">Terms</a> &nbsp;
+    <a href="mailto:hugo@vystral.com">hugo@vystral.com</a>
+  </span>
+</div></div></footer>
+
+<script src="track.js"></script>
+<script src="buy.js"></script>
+</body>
+</html>
