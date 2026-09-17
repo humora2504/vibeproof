@@ -43,7 +43,7 @@
     <div class="card" style="margin:22px 0">
       <h3 style="margin-top:0">Download</h3>
       <p><a class="btn" id="dl-zip" href="#" download data-track="download-zip">vibeproof-fixpack.zip</a></p>
-      <p class="small muted" style="margin-bottom:0">Individual files: <span id="file-list"></span></p>
+      <p class="small muted" style="margin-bottom:0"><span id="file-list"></span></p>
     </div>
 
     <h2>Run it</h2>
@@ -104,35 +104,70 @@ SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... \
 
   if (!sid) { show(failed); document.getElementById('title').textContent = 'Nothing to show'; return; }
 
-  // The delivery path is the hash of the session id, so it cannot be guessed,
-  // and it only exists once the poller has seen Stripe mark the payment paid.
-  function sha256Hex(s) {
-    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)).then(function (buf) {
-      return Array.from(new Uint8Array(buf)).map(function (b) {
-        return b.toString(16).padStart(2, '0');
-      }).join('');
-    });
+  // The pack sits in a public repository, because that is what GitHub Pages
+  // serves, so it is stored encrypted. Two different keys are derived from the
+  // Checkout Session id: one names the folder, one decrypts the file. Knowing
+  // the folder tells you nothing about the contents, and the key never leaves
+  // this browser.
+  var enc = new TextEncoder();
+
+  function hmacHex(label, msg) {
+    return crypto.subtle.importKey('raw', enc.encode(label), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+      .then(function (k) { return crypto.subtle.sign('HMAC', k, enc.encode(msg)); })
+      .then(function (buf) {
+        return Array.from(new Uint8Array(buf)).map(function (b) {
+          return b.toString(16).padStart(2, '0');
+        }).join('');
+      });
+  }
+
+  function aesKey(sessionId) {
+    return crypto.subtle.importKey('raw', enc.encode('vibeproof-delivery-key-v1'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+      .then(function (k) { return crypto.subtle.sign('HMAC', k, enc.encode(sessionId)); })
+      .then(function (raw) { return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['decrypt']); });
+  }
+
+  function hexToBytes(hex) {
+    var a = new Uint8Array(hex.length / 2);
+    for (var i = 0; i < a.length; i++) a[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return a;
   }
 
   var started = Date.now();
   var tries = 0;
 
-  sha256Hex(sid).then(function (hash) {
+  hmacHex('vibeproof-delivery-path-v1', sid).then(function (hash) {
     var dir = 'd/' + hash;
+
+    function unlock(manifest) {
+      return Promise.all([
+        aesKey(sid),
+        fetch(dir + '/' + manifest.blob, { cache: 'no-store' }).then(function (r) { return r.arrayBuffer(); }),
+      ]).then(function (parts) {
+        return crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv: hexToBytes(manifest.iv) }, parts[0], parts[1]);
+      }).then(function (plain) {
+        var blob = new Blob([plain], { type: 'application/zip' });
+        var url = URL.createObjectURL(blob);
+        var a = document.getElementById('dl-zip');
+        a.href = url;
+        a.setAttribute('download', manifest.filename || 'vibeproof-fixpack.zip');
+        a.textContent = (manifest.filename || 'vibeproof-fixpack.zip') +
+          '  (' + Math.round((manifest.plain_bytes || plain.byteLength) / 1024) + ' KB)';
+        document.getElementById('file-list').textContent =
+          'Decrypted in your browser. Nothing readable is stored on the server.';
+      });
+    }
 
     function attempt() {
       tries++;
       fetch(dir + '/manifest.json?' + Date.now(), { cache: 'no-store' })
         .then(function (r) { if (!r.ok) throw new Error('not yet'); return r.json(); })
-        .then(function (m) {
+        .then(unlock)
+        .then(function () {
           document.getElementById('title').textContent = 'Your Fix Pack is ready';
           document.getElementById('sub').textContent =
-            'Payment confirmed. This page stays at this URL, so you can come back to it.';
-          document.getElementById('dl-zip').href = dir + '/' + m.zip;
-          var list = document.getElementById('file-list');
-          list.innerHTML = m.files.map(function (f) {
-            return '<a href="' + dir + '/' + f + '" download>' + f + '</a>';
-          }).join(' &middot; ');
+            'Payment confirmed. Keep this URL: it is the only way back to your download.';
           show(ready);
           if (window.vtTrack) window.vtTrack('delivered', { t: Math.round((Date.now() - started) / 1000) });
         })
@@ -144,7 +179,7 @@ SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... \
               'Or reply to your Stripe receipt and it will be sorted by hand.';
             return;
           }
-          status.textContent = 'Checking with Stripe…';
+          status.textContent = 'Checking with Stripe\u2026';
           elapsed.textContent = 'Waiting ' + secs + 's. Keep this tab open, it refreshes itself.';
           setTimeout(attempt, tries < 12 ? 5000 : 15000);
         });
