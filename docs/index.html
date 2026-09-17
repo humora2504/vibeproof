@@ -249,6 +249,15 @@
     customers yet. When there are, they will be real ones.</p>
   </div></details>
 
+  <details><summary>Row Level Security broke my app. Is that this tool's fault?</summary><div class="body">
+    <p>Turning it on denies access until a policy allows it, so a table that was
+    silently world-readable stops returning rows until the right policy exists. That is
+    the protection working, not a fault. The error you will see is
+    <a href="new-row-violates-row-level-security-policy.html">new row violates row-level
+    security policy</a>, and that page explains the four causes in the order worth
+    checking.</p>
+  </div></details>
+
   <details><summary>How do I get a refund?</summary><div class="body">
     <p>Reply to the Stripe receipt that lands in your inbox and say it did not work.
     Within 30 days, no questions and no form. Stripe handles the refund itself.</p>

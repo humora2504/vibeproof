@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>new row violates row-level security policy: what it means and how to fix it</title>
+<meta name="description" content="The Supabase insert error explained properly: why it happens, the four causes in order of likelihood, and the policy that actually fixes each one.">
+<link rel="canonical" href="https://humora2504.github.io/vibeproof/new-row-violates-row-level-security-policy.html">
+<meta property="og:title" content="new row violates row-level security policy: what it means and how to fix it">
+<meta property="og:description" content="The Supabase insert error explained properly: why it happens, the four causes in order of likelihood, and the policy that actually fixes each one.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://humora2504.github.io/vibeproof/new-row-violates-row-level-security-policy.html">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>&#128274;</text></svg>">
+<link rel="stylesheet" href="style.css">
+<script type="application/ld+json">[{"@context": "https://schema.org", "@type": "TechArticle", "headline": "\"new row violates row-level security policy\"", "description": "The Supabase insert error explained properly: why it happens, the four causes in order of likelihood, and the policy that actually fixes each one.", "url": "https://humora2504.github.io/vibeproof/new-row-violates-row-level-security-policy.html", "datePublished": "2026-09-18", "dateModified": "2026-09-18", "author": {"@type": "Organization", "name": "vibeproof"}}, {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Why does my insert fail even though RLS is enabled and I have a policy?", "acceptedAnswer": {"@type": "Answer", "text": "An INSERT is checked against WITH CHECK, not USING. A policy with only a USING clause allows nothing to be inserted. Add WITH CHECK with the same condition."}}, {"@type": "Question", "name": "Why does it work in the SQL editor but not from my app?", "acceptedAnswer": {"@type": "Answer", "text": "The SQL editor runs as a privileged role that bypasses Row Level Security. Your app runs as anon or authenticated, which does not. Testing in the editor proves nothing about what your users can do."}}, {"@type": "Question", "name": "Should I just disable RLS to make the error go away?", "acceptedAnswer": {"@type": "Answer", "text": "No. Disabling it makes the table readable and writable by anyone holding your anon key, which ships inside your frontend bundle. The error is the protection working."}}]}]</script>
+</head>
+<body>
+<header class="site"><div class="wrap">
+  <a class="logo" href="./"><b>&#9632;</b> vibeproof</a>
+  <nav><a href="./">Home</a> <a href="./#pack">Fix Pack</a></nav>
+</div></header>
+<main class="wrap"><section class="hero">
+<h1>&quot;new row violates row-level security policy&quot;</h1>
+
+<p class="lede">This error means the database stopped you writing a row that no
+policy allowed. It is not a bug. It is the one moment Row Level Security tells
+you it is switched on, and it is worth understanding rather than switching off.</p>
+
+<p>Here is the exact shape of it:</p>
+<pre class="block">{
+  "code": "42501",
+  "message": "new row violates row-level security policy for table \"posts\""
+}</pre>
+
+<h2>What the database is actually checking</h2>
+
+<p>Every write is tested against a policy. The two halves matter, and mixing them
+up causes most of these errors:</p>
+
+<ul class="checks">
+<li><code>USING</code> decides which existing rows you may see, update or delete.</li>
+<li><code>WITH CHECK</code> decides whether a row you are writing is allowed to exist.</li>
+</ul>
+
+<p>An <code>INSERT</code> has no existing row, so <code>USING</code> is never
+consulted. If your policy only has a <code>USING</code> clause, every insert
+fails, however correct that clause looks.</p>
+
+<h2>The four causes, in the order you should check them</h2>
+
+<h3>1. The policy has no WITH CHECK</h3>
+
+<p>This is the most common cause by a wide margin.</p>
+
+<pre class="block">-- Allows reading your own rows. Allows inserting nothing at all.
+create policy "own posts" on public.posts
+  for all to authenticated
+  using ( (select auth.uid()) = user_id );
+
+-- Fixed: the same condition applied to rows being written.
+create policy "own posts" on public.posts
+  for all to authenticated
+  using ( (select auth.uid()) = user_id )
+  with check ( (select auth.uid()) = user_id );</pre>
+
+<h3>2. You are not sending the row's owner</h3>
+
+<p>The policy compares <code>auth.uid()</code> with a column. If your insert
+leaves that column null, the comparison is false and the write is refused.</p>
+
+<pre class="block">// Refused: user_id is null, so it cannot equal auth.uid()
+await supabase.from('posts').insert({ body });
+
+// Allowed
+const { data: { user } } = await supabase.auth.getUser();
+await supabase.from('posts').insert({ body, user_id: user.id });</pre>
+
+<p>Better still, let the database fill it in and stop trusting the client:</p>
+
+<pre class="block">alter table public.posts
+  alter column user_id set default auth.uid();</pre>
+
+<h3>3. There is no session, so auth.uid() is null</h3>
+
+<p>If the request carries no valid token, <code>auth.uid()</code> returns null
+and every ownership check fails. This catches people out with server-rendered
+pages, where the browser has a session but the server client was never given it.</p>
+
+<p>Check what the database sees, from the client that is actually failing:</p>
+
+<pre class="block">const { data: { user }, error } = await supabase.auth.getUser();
+console.log('database will see uid:', user?.id ?? 'null');</pre>
+
+<h3>4. The policy is granted to the wrong role</h3>
+
+<p>A policy written <code>to authenticated</code> does nothing for a logged-out
+visitor, and one written <code>to anon</code> does nothing for a logged-in one.
+Roles are not inherited between the two.</p>
+
+<pre class="block">-- Applies to both, when that is what you mean
+create policy "own posts" on public.posts
+  for all to anon, authenticated
+  using ( (select auth.uid()) = user_id )
+  with check ( (select auth.uid()) = user_id );</pre>
+
+<h2>The fifth cause, which is not a policy problem at all</h2>
+
+<p>Row Level Security is checked after table privileges, not instead of them. If
+the role has no <code>INSERT</code> privilege, no policy can rescue it:</p>
+
+<pre class="block">grant select, insert, update, delete on public.posts to authenticated;</pre>
+
+<p>People hit this after copying a hardening snippet that revokes everything from
+<code>anon</code> and forgets to grant anything back to <code>authenticated</code>.</p>
+
+<h2>How to see which policy refused you</h2>
+
+<p>List what is actually on the table, rather than what you think you wrote:</p>
+
+<pre class="block">select policyname, cmd, roles, qual as using_clause, with_check
+from pg_policies
+where schemaname = 'public' and tablename = 'posts';</pre>
+
+<p>A <code>with_check</code> column showing <code>null</code> on a row where
+<code>cmd</code> is <code>ALL</code> or <code>INSERT</code> is your answer.</p>
+
+<h2>What not to do</h2>
+
+<p>The two fixes that show up in forum answers and make things worse:</p>
+
+<p><code>alter table posts disable row level security</code> makes the error stop
+and makes the table readable and writable by anyone with your anon key. That key
+is inside your frontend bundle, so that means anyone at all.</p>
+
+<p><code>with check (true)</code> stops the error and lets any logged-in user
+write rows owned by anyone else, which is usually worse than it sounds: it means
+one user can create records attributed to another.</p>
+
+<h2>Testing it properly</h2>
+
+<p>The SQL editor runs as a privileged role and bypasses policies entirely. A
+query that works there tells you nothing. Test with an ordinary client, signed
+in as a real user, and then test again signed in as a different user to confirm
+they cannot reach the first one's rows.</p>
+
+<hr>
+<h2>Check your own project</h2>
+<p>One command. No install, no signup, and it never touches the network. It reads
+your repository and tells you which tables are reachable and which keys are exposed,
+with the fix beside each finding.</p>
+<pre class="block">npx github:humora2504/vibeproof .</pre>
+<p class="small muted">Free and MIT licensed. If you want the policies generated for
+your own schema, and a script that proves an anonymous visitor is refused, there is a
+<a href="./#pack" data-track="content-to-pack">$19 Fix Pack</a>. The scanner stays free either way.</p>
+</section></main>
+<footer class="site"><div class="wrap"><div class="row">
+  <span>vibeproof &middot; MIT</span>
+  <span><a href="privacy.html">Privacy</a> &nbsp; <a href="terms.html">Terms</a> &nbsp; <a href="mailto:hugo@vystral.com">hugo@vystral.com</a></span>
+</div></div></footer>
+<script src="track.js"></script>
+</body>
+</html>

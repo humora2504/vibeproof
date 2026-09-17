@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+# The delivery folders hold encrypted purchases, nothing useful to a crawler.
+Disallow: /vibeproof/d/
+Disallow: /vibeproof/pack/
+Disallow: /vibeproof/thanks.html
+Sitemap: https://humora2504.github.io/vibeproof/sitemap.xml
