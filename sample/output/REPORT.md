@@ -1,6 +1,6 @@
 # vibeproof Fix Pack report
 
-Generated 2026-09-17 16:51 from supabase/migrations/001_schema.sql
+Generated 2026-09-17 16:54 from supabase/migrations/001_schema.sql
 
 ## Tables found: 9
 
@@ -17,6 +17,17 @@ Membership model found: a user in `org_members` links `user_id` to `org_id`. Org
 | notes | **off** | user_id | high |
 | plans | **off** | none found | low |
 | events | on | user_id | medium |
+
+> **1 table(s) stay open after running this file.**
+>
+> Postgres combines permissive policies with OR, so an existing policy that passes
+> for everyone still grants access alongside the policy added here. These are left
+> in place because a policy you wrote deliberately is not ours to delete, but they
+> must go before the table is protected:
+>
+> - `drop policy if exists "read all events" on public.events;`
+>
+> Or re-run with `--replace-existing` to have them dropped for you.
 
 ## Apply it
 
