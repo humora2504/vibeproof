@@ -11,10 +11,13 @@
   // The delivery page carries an unlock token in the URL. It must never reach a
   // beacon, a log, or anything else. Only the path is ever sent; scrubbed on purpose.
   var dev=/Mobi|Android/i.test(navigator.userAgent)?"mobile":"desktop";
+  // Automated browsers set navigator.webdriver. Marking them here means our own
+  // verification runs can never be mistaken for demand, however they navigate.
+  var bot=(navigator.webdriver===true||/HeadlessChrome|Playwright|Puppeteer/i.test(navigator.userAgent))?1:0;
   var lang=(navigator.language||"").slice(0,2);
   var t0=Date.now(), maxScroll=0, active=0, lastTick=Date.now(), sentDepth={};
   function send(ev,extra){
-    var d={ev:ev,p:location.pathname,src:src,c:camp,seg:seg,v:variant,dev:dev,lang:lang,vid:vid,t:Math.round((Date.now()-t0)/1000)};
+    var d={ev:ev,p:location.pathname,bot:bot,src:src,c:camp,seg:seg,v:variant,dev:dev,lang:lang,vid:vid,t:Math.round((Date.now()-t0)/1000)};
     if(extra)for(var k in extra)d[k]=extra[k];
     try{navigator.sendBeacon?navigator.sendBeacon(T,JSON.stringify(d)):fetch(T,{method:"POST",body:JSON.stringify(d),keepalive:true});}catch(e){}
   }
